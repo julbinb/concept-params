@@ -1,26 +1,21 @@
 (* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 (* Simply Typed Lambda Calculus with simple Concept Parameters
-   :: Syntax
+   :: version a
+   Properties
 
-   Definitions of STLC are based on
+   Properties of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 17 Oct 2016
+   Last Update: Mon, 18 Oct 2016
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
 (* ***************************************************************** *)
-(** * cpSTLC Syntax (Simply Typed Lambda Calculus 
-      with simple Concept Parameters)  *)
+(** * cpSTLCa Properties
+      (Simply Typed Lambda Calculus with simple Concept Parameters  
+       :: version a) *)
 (* ***************************************************************** *)
 (* ***************************************************************** *)
 
-Add LoadPath "../..".
-
-Require Import ConceptParams.BasicPLDefs.Maps.
 
 
-Inductive ty : Type :=
-  | TBool : ty 
-  | TNat  : ty
-  | TArrow : ty -> ty -> ty.

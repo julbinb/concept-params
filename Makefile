@@ -94,8 +94,8 @@ endif
 #                    #
 ######################
 
-VFILES:=cpSTLC/Semantics.v\
-  cpSTLC/Syntax.v\
+VFILES:=cpSTLC/cpSTLCa_Defs.v\
+  BasicPLDefs/Relations.v\
   BasicPLDefs/Maps.v
 
 ifneq ($(filter-out archclean clean cleanall printenv,$(MAKECMDGOALS)),)

@@ -5,8 +5,9 @@
 -R . "ConceptParams"
 
 ./BasicPLDefs/Maps.v
-./cpSTLC/Syntax.v
-./cpSTLC/Semantics.v
+./BasicPLDefs/Relations.v
+
+./cpSTLC/cpSTLCa_Defs.v
 
 # VS := *.v
 
