@@ -11,6 +11,14 @@
 (* ***************************************************************** *)
 (* ***************************************************************** *)
 
+Require Import Coq.Arith.Arith.
+Require Import Coq.Bool.Bool.
+
+Require Import Coq.Logic.FunctionalExtensionality.
+
+Require Import Coq.Structures.OrderedType.
+Require Import Coq.Structures.OrderedTypeEx.
+
 (** Maps (or dictionaries) are ubiquitous data structures, both in
     software construction generally and in the theory of programming
     languages in particular.
@@ -20,10 +28,6 @@
     doesn't exist, and _partial_ maps, which return an [option] to
     indicate success or failure.  The latter is defined in terms of
     the former, using [None] as the default element. *)
-
-Require Import Coq.Arith.Arith.
-Require Import Coq.Bool.Bool.
-Require Import Coq.Logic.FunctionalExtensionality.
 
 
 (* ################################################################# *)
@@ -41,7 +45,7 @@ Definition beq_id id1 id2 :=
   end.
 
 (* ----------------------------------------------------------------- *)
-(** ** Properties of Identifiers *)
+(** *** Properties of Identifiers *)
 
 Theorem beq_id_refl : forall id, true = beq_id id id.
 Proof.
@@ -77,7 +81,7 @@ Proof.
 Qed.
 
 (* ----------------------------------------------------------------- *)
-(** ** Reflecting Equality of Identifiers *)
+(** *** Reflecting Equality of Identifiers *)
 
 (** It's convenient to use the reflection idioms.  
     We begin by proving a fundamental _reflection lemma_ relating 
@@ -91,8 +95,109 @@ Lemma beq_idP : forall x y, reflect (x = y) (beq_id x y).
 Proof.
   intros x y. 
   apply iff_reflect. symmetry. apply beq_id_true_iff.
+Qed.
+
+(* ----------------------------------------------------------------- *)
+(** *** Propositional Equality of Identifiers *)
+
+Definition eq_id x y : Prop :=
+  match x, y with
+    Id n, Id m => eq_nat n m
+  end.
+
+Lemma eq_id_iff_eq_nat : forall n m,
+    eq_id (Id n) (Id m) <-> eq_nat n m.
+Proof.
+  tauto.
 Qed. 
 
+Theorem eq_id_decide : forall x y, {eq_id x y} + {~ eq_id x y}.
+Proof.
+  intros [n] [m]. simpl.
+  apply eq_nat_decide.
+Qed.
+
+Theorem eq_id_dec : forall (x y : id), {x = y} + {x <> y}.
+Proof.
+  intros [x] [y]. destruct (eq_nat_dec x y) as [H|H].
+  - subst. left. reflexivity.
+  - right. intros contra. inversion contra as [contra'].
+    apply H in contra'. assumption.
+Qed.
+
+
+(* ================================================================= *)
+(** ** Identifiers as Ordered Type *)
+
+Definition lt_id id1 id2 :=
+  match id1,id2 with
+    | Id n1, Id n2 => lt n1 n2
+  end.
+
+Lemma lt_id_iff_lt_nat : forall n m,
+    lt_id (Id n) (Id m) <-> lt n m.
+Proof.
+  tauto.
+Qed.  
+
+Module Id_as_OT <: OrderedType.
+
+  Definition t := id.
+
+  Definition eq := @eq id.
+  Definition eq_refl := @eq_refl t.
+  Definition eq_sym := @eq_sym t.
+  Definition eq_trans := @eq_trans t.
+
+  Definition lt := lt_id.
+
+  Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
+  Proof.
+    intros [x] [y] [z]. unfold lt, lt_id.
+    apply Nat.lt_trans.
+  Qed.  
+
+  Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
+  Proof.
+    intros [x] [y]. unfold lt, lt_id. unfold eq.
+    intros Hlt Contra. inversion Contra as [Contra'].
+    apply Nat.lt_neq in Hlt. apply Hlt in Contra'.
+    apply Contra'.
+  Qed.
+  
+  Definition compare : forall x y : t, Compare lt eq x y.
+  Proof.
+    intros [x] [y].
+    remember Nat_as_OT.compare as Hnat. clear HeqHnat.
+    destruct (Hnat x y) as [H | H | H].
+    - (* LT *)
+      unfold Nat_as_OT.lt in H. rewrite <- lt_id_iff_lt_nat in H.
+      apply LT. assumption.
+    - (* EQ *)
+      unfold Nat_as_OT.eq in H. subst.
+      apply EQ. apply eq_refl.
+      - (* GT *)
+      unfold Nat_as_OT.lt in H. rewrite <- lt_id_iff_lt_nat in H.
+      apply GT. assumption.
+  Qed.    
+
+  Definition eq_dec := eq_id_dec.
+
+End Id_as_OT.
+
+Require Export Coq.FSets.FMapAVL.
+
+Print Id_as_OT.
+
+Module IdSet := FMapAVL.Make(Id_as_OT).
+
+Print IdSet.
+
+Print Coq.Structures.OrderedType.
+
+Module A.
+  Definition x := 5.
+End A.
 
 (* ################################################################# *)
 (** * Total Maps *)
@@ -276,3 +381,4 @@ Proof.
   intros X v1 v2 x1 x2 m. unfold update.
   apply t_update_permute.
 Qed.
+
