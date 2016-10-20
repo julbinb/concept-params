@@ -213,6 +213,11 @@ Module IdSetExamples.
 
 End IdSetExamples.
 
+
+(** Type of the set *)
+
+Definition id_set := IdSet.t.
+
 (** Empty set of ids *)
 
 Definition ids_empty := IdSet.empty.

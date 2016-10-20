@@ -380,7 +380,7 @@ Definition stempty := @empty cty.
 
 (** Let's check some examples *)
 
-Module TestConcepts.
+Module TestConcepts1.
 Import Examples.
   
 Example test_concept_1 : concept_welldefined stempty Cnrevmap.
@@ -420,7 +420,7 @@ Proof.
   apply H1 in Contra. contradiction.
 Qed.
 
-End TestConcepts.
+End TestConcepts1.
 
 (** There is a problem here: it's quite cumbersome to check 
     well-definedness of concept definitions in proposition style.
@@ -429,11 +429,116 @@ End TestConcepts.
 
     It would be convenient to at least have an algorithm for 
     checking name repetitions in a concept definition.
-    To check this, we need an effective set. E.g. MSetAVL.
+    To check this, we need an effective set of ids. 
+    The one based on AVL trees is defined in [Maps.v].
 *)
 
+(** Let's write a function to check name repetitions. *)
+
+Definition ids_are_unique (names : list id) : bool :=
+  let 
+    fix check (nmlist : list id) (nmset : id_set) : bool
+    := match nmlist with
+       | [] => true
+       | nm :: nms => if ids_mem nm nmset 
+                      then false
+                      else check nms (ids_add nm nmset)
+       end
+  in check names ids_empty.
+
+(** And check it. *)
+
+Module TestIdsUniqueness1.
+Import Examples.
+  
+Example test_ids_1 : ids_are_unique [vx; vy; vz] = true.
+Proof.
+  reflexivity.
+Qed.
+
+Example test_ids_2 : ids_are_unique [] = true.
+Proof.
+  reflexivity.
+Qed.
+
+Example test_ids_3 : ids_are_unique [vx; vy; vx] = false.
+Proof.
+  reflexivity.
+Qed.
+
+End TestIdsUniqueness1.
+
+(** [id_list_to_id_set] build set from a list of ids. *)
+
+Definition id_list_to_id_set (l : list id) :=
+  fold_left (fun acc x => ids_add x acc) l ids_empty.
 
 
+(*Lemma ids_are_unique_cons : forall (x : id) (l : list id),
+    ids_are_unique (x :: l) = true ->
+    ids_are_unique l = true.
+Proof.
+  intros x [ | h l'].
+  - (* l = nil *)
+    intros []. reflexivity. 
+  - (* l = h :: l' *)
+    intros H. unfold ids_are_unique in H.
+    simpl in H.
+    destruct (ids_mem h (ids_add x ids_empty)) eqn:Hhx.
+    + (* x = h *) inversion H.
+    + (* x <> h *)
+      unfold ids_are_unique. simpl.
+      assert (Hremx: IdSet.elements (ids_add h ids_empty) = IdSet.elements (IdSet.remove x (ids_add h (ids_add x ids_empty)))). 
+      { unfold ids_add, ids_empty. compute. reflexivity.
+      
+Print IdSet.    
+
+
+Abort.
+
+Lemma not_ids_are_unique__ex_dup : forall (x : id) (l : list id),
+    ids_are_unique l = true ->
+    ids_are_unique (x :: l) = false -> 
+    ids_mem x (id_list_to_id_set l) = true.
+Proof.
+  intros x l. induction l as [| h l' IHl'].
+  - (* l = nil *)
+    intros [] contra. unfold ids_are_unique in contra.
+    simpl in contra. inversion contra.
+  - (* l = h :: l' *)
+    
+
+Abort.
+
+
+Print MSetInterface.
+
+Import MSetFacts.
+
+Print IdSet.
+
+Check MSetFacts.mem_iff.
+
+Check IdSet.mem_iff.
+
+
+Lemma ids_are_unique__NoDup : forall (l : list id),
+    ids_are_unique l = true -> NoDup l.
+Proof.
+  intros l. induction l as [ | h l' IHl'].
+  - (* l = nil *)
+    intros H. apply NoDup_nil.
+  - (* l = h :: l' *)
+    unfold ids_are_unique.
+    destruct (ids_mem h ids_empty) eqn:Hmem.
+    + intros contra. inversion contra. 
+    + clear Hmem.
+      unfold ids_are_unique in IHl'. simpl in IHl'.
+      
+      unfold IdSet.mem in Hmem.
+ inversion Hmem.
+
+Abort.*)
 
 (*
 Definition map_nat_nat: Type := M.t nat.
