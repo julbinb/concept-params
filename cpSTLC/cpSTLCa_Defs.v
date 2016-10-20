@@ -27,8 +27,6 @@ Import ListNotations.
 
 Require Import Coq.omega.Omega.
 
-Require Import Coq.FSets.FMapAVL.
-
 
 (* ################################################################# *)
 (** ** Syntax *)
@@ -431,17 +429,11 @@ End TestConcepts.
 
     It would be convenient to at least have an algorithm for 
     checking name repetitions in a concept definition.
-    To check this, we need an effective set. E.g. FMapAVL.
+    To check this, we need an effective set. E.g. MSetAVL.
 *)
 
-(** Let's define an effective set of ids based on AVL trees. *)
 
-Require Import Coq.FSets.FMapAVL.
 
-Print Maps. Print Coq.Structures.OrderedType.
-Print Id_as_OT.
-
-Module IdSet := FMapAVL.Make(Id_as_OT).
 
 (*
 Definition map_nat_nat: Type := M.t nat.

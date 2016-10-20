@@ -17,7 +17,7 @@ Require Import Coq.Bool.Bool.
 Require Import Coq.Logic.FunctionalExtensionality.
 
 Require Import Coq.Structures.OrderedType.
-Require Import Coq.Structures.OrderedTypeEx.
+Require Import Coq.ZArith.ZArith.
 
 (** Maps (or dictionaries) are ubiquitous data structures, both in
     software construction generally and in the theory of programming
@@ -127,7 +127,7 @@ Qed.
 
 
 (* ================================================================= *)
-(** ** Identifiers as Ordered Type *)
+(** ** Set of Identifiers *)
 
 Definition lt_id id1 id2 :=
   match id1,id2 with
@@ -139,6 +139,9 @@ Lemma lt_id_iff_lt_nat : forall n m,
 Proof.
   tauto.
 Qed.  
+
+(* ----------------------------------------------------------------- *)
+(** *** Identifiers as Ordered type *)
 
 Module Id_as_OT <: OrderedType.
 
@@ -167,37 +170,66 @@ Module Id_as_OT <: OrderedType.
   
   Definition compare : forall x y : t, Compare lt eq x y.
   Proof.
-    intros [x] [y].
-    remember Nat_as_OT.compare as Hnat. clear HeqHnat.
-    destruct (Hnat x y) as [H | H | H].
-    - (* LT *)
-      unfold Nat_as_OT.lt in H. rewrite <- lt_id_iff_lt_nat in H.
-      apply LT. assumption.
-    - (* EQ *)
-      unfold Nat_as_OT.eq in H. subst.
-      apply EQ. apply eq_refl.
-      - (* GT *)
-      unfold Nat_as_OT.lt in H. rewrite <- lt_id_iff_lt_nat in H.
-      apply GT. assumption.
-  Qed.    
+    intros [x] [y]. destruct (nat_compare x y) as [ | | ] eqn:H.
+    - (* EQ *) apply EQ. apply nat_compare_eq in H; subst. 
+               reflexivity.
+    - (* LT *) apply LT. apply nat_compare_Lt_lt in H.
+               rewrite <- lt_id_iff_lt_nat in H. assumption.
+    - (* GT *) apply GT. apply nat_compare_Gt_gt in H.
+               unfold gt in H.
+               rewrite <- lt_id_iff_lt_nat in H. assumption.
+  Defined. 
 
   Definition eq_dec := eq_id_dec.
 
 End Id_as_OT.
 
-Require Export Coq.FSets.FMapAVL.
+(* ----------------------------------------------------------------- *)
+(** *** IdSet *)
 
-Print Id_as_OT.
+(** Let's define a set of ids. *)
 
-Module IdSet := FMapAVL.Make(Id_as_OT).
+(* JB | I am not sure why is this needed. Probably, because of the
+        switch from FSets to MSets *)
+Require Import Coq.MSets.MSets.
+Module Id_as_OT' := (Coq.Structures.OrdersAlt.Update_OT Id_as_OT).
 
-Print IdSet.
+(* Module for a set of ids *)
+Module IdSet := MSetAVL.Make Id_as_OT'.
 
-Print Coq.Structures.OrderedType.
+Module IdSetExamples.
+  
+  Module M1 := IdSet.
 
-Module A.
-  Definition x := 5.
-End A.
+  Definition ens1' := M1.add (Id 3) (M1.add (Id 0) (M1.add (Id 2) (M1.empty))).
+  Definition ens2' := M1.add (Id 0) (M1.add (Id 2) (M1.add (Id 4) (M1.empty))).
+  Definition ens3' := M1.inter ens1' ens2'.
+  Definition ens4' := M1.union ens1' ens2'.
+
+  Compute (M1.mem (Id 2) ens3').
+  Eval vm_compute in (M1.elements ens3').
+  Eval vm_compute in (M1.elements ens4').
+  Eval vm_compute in M1.compare ens3' ens4'.
+
+End IdSetExamples.
+
+(** Empty set of ids *)
+
+Definition ids_empty := IdSet.empty.
+
+(** Check membership *)
+
+Definition ids_mem := IdSet.mem.
+
+(** Add elem into set *)
+
+Definition ids_add := IdSet.add.
+
+(** Make singleton set  *)
+
+Definition ids_singleton := IdSet.singleton.
+
+
 
 (* ################################################################# *)
 (** * Total Maps *)
