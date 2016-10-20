@@ -5,7 +5,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 18 Oct 2016
+   Last Update: Thu, 20 Oct 2016
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -26,6 +26,8 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 
 Require Import Coq.omega.Omega.
+
+Require Import Coq.FSets.FMapAVL.
 
 
 (* ################################################################# *)
@@ -123,8 +125,8 @@ Require Import Coq.omega.Omega.
 Inductive ty : Type :=
   | TBool : ty 
   | TNat  : ty
-  | TArrow   : ty -> ty -> ty
-  | TConcept : id -> ty -> ty
+  | TArrow : ty -> ty -> ty        (* T1 -> T2 *)
+  | TConceptPrm : id -> ty -> ty   (* C # T *)
 .
 
 (* ----------------------------------------------------------------- *)
@@ -339,7 +341,7 @@ Inductive ty_valid (st : symbtable) : ty -> Prop :=
   | ty_valid_cpt   : forall C T,
       concept_defined st C ->
       ty_valid st T ->
-      ty_valid st (TConcept C T)
+      ty_valid st (TConceptPrm C T)
 .
 
 (** Now we are ready to define a property "concept is well defined" *)
@@ -398,8 +400,68 @@ Proof.
     apply Forall_cons. apply ty_valid_arrow; repeat constructor.
     apply Forall_nil.
 Qed.
-    
+
+Example test_concept_2 : concept_welldefined stempty Cempty.
+Proof.
+  unfold concept_welldefined, Cnrevmap.
+  simpl.
+  split.
+  - (* NoDup *)
+    apply NoDup_nil.
+  - (* All types valid *)
+    apply Forall_nil.
+Qed.
+
+Example test_concept_3 : ~ (concept_welldefined stempty Cbad1). 
+Proof.
+  unfold concept_welldefined, Cnrevmap.
+  simpl. intros [HDup HTy].
+  
+  inversion HDup; subst.
+  assert (Contra: In FNmap [FNmap]) by (simpl; left; reflexivity).
+  apply H1 in Contra. contradiction.
+Qed.
+
 End TestConcepts.
+
+(** There is a problem here: it's quite cumbersome to check 
+    well-definedness of concept definitions in proposition style.
+    We could implement auxuliary tactics to make proofs easier,
+    but it's not very practical. 
+
+    It would be convenient to at least have an algorithm for 
+    checking name repetitions in a concept definition.
+    To check this, we need an effective set. E.g. FMapAVL.
+*)
+
+(** Let's define an effective set of ids based on AVL trees. *)
+
+Require Import Coq.FSets.FMapAVL.
+
+Print Maps. Print Coq.Structures.OrderedType.
+Print Id_as_OT.
+
+Module IdSet := FMapAVL.Make(Id_as_OT).
+
+(*
+Definition map_nat_nat: Type := M.t nat.
+
+Definition find k (m: map_nat_nat) := M.find k m.
+
+Definition update (p: nat * nat) (m: map_nat_nat) :=
+  M.add (fst p) (snd p) m.
+
+Notation "k |-> v" := (pair k v) (at level 60).
+Notation "[ ]" := (M.empty nat).
+Notation "[ p1 , .. , pn ]" := (update p1 .. (update pn (M.empty nat)) .. ).
+
+Example ex1: find 3 [1 |-> 2, 3 |-> 4] = Some 4.
+Proof. reflexivity. Qed.
+
+Example ex2: find 5 [1 |-> 2, 3 |-> 4] = None.
+Proof. reflexivity. Qed.
+*)
+
 
 
 (* ################################################################# *)
