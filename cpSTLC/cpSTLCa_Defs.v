@@ -468,34 +468,74 @@ Qed.
 
 End TestIdsUniqueness1.
 
-(** [id_list_to_id_set] build set from a list of ids. *)
+(** [id_list_to_id_set] builds set from a list of ids. *)
 
 Definition id_list_to_id_set (l : list id) :=
   fold_left (fun acc x => ids_add x acc) l ids_empty.
 
 
-(*Lemma ids_are_unique_cons : forall (x : id) (l : list id),
+Require Import MSets.MSetFacts.
+Module IdSetFacts := MSetFacts.WFacts IdSet.
+Module IdSetProps := MSetProperties.WProperties IdSet.
+
+Print MSetFacts.WFactsOn.
+
+Lemma mem_eq_add : forall (x : id) (s : id_set),
+    ids_mem x (ids_add x s) = true.
+Proof.
+  Import IdSetFacts.
+  intros x s. rewrite mem_1.
+  reflexivity.
+  apply add_1. reflexivity.
+Qed.
+
+(*
+Lemma mem_neq_add : forall (x y : id) (s : id_set),
+    x <> y ->
+    ids_mem y (ids_add x s) = ids_mem y s.
+Proof.
+  Import IdSetFacts. 
+  intros x y s. intros H. Check add_neq_iff.
+  remember (add_neq_iff s H) as Hneq. clear HeqHneq.
+  
+  
+  reflexivity.
+  apply add_1. reflexivity.
+Qed.
+
+Print IdSetFacts.
+
+Lemma ids_are_unique_cons : forall (x : id) (l : list id),
     ids_are_unique (x :: l) = true ->
     ids_are_unique l = true.
 Proof.
+  Import IdSetFacts.
   intros x [ | h l'].
   - (* l = nil *)
     intros []. reflexivity. 
   - (* l = h :: l' *)
-    intros H. unfold ids_are_unique in H.
-    simpl in H.
-    destruct (ids_mem h (ids_add x ids_empty)) eqn:Hhx.
-    + (* x = h *) inversion H.
+    unfold ids_are_unique. unfold ids_mem, ids_add, ids_empty.
+    intros H. simpl in H.
+    destruct (beq_idP h x).
+    (* destruct (ids_mem h (ids_add x ids_empty)) eqn:Hhx. *)
+    + (* x = h *)
+      subst. rewrite -> mem_eq_add in H.
+      inversion H.
     + (* x <> h *)
-      unfold ids_are_unique. simpl.
-      assert (Hremx: IdSet.elements (ids_add h ids_empty) = IdSet.elements (IdSet.remove x (ids_add h (ids_add x ids_empty)))). 
-      { unfold ids_add, ids_empty. compute. reflexivity.
+       simpl.
       
+      
+      rewrite <- not_mem_iff in Hhx. unfold not in Hhx.
+      
+      assert (Hremx: IdSet.elements (ids_add h ids_empty) = IdSet.elements (IdSet.remove x (ids_add h (ids_add x ids_empty)))). 
+      { unfold ids_add, ids_empty.
+        
 Print IdSet.    
 
 
 Abort.
-
+*)
+(*
 Lemma not_ids_are_unique__ex_dup : forall (x : id) (l : list id),
     ids_are_unique l = true ->
     ids_are_unique (x :: l) = false -> 
