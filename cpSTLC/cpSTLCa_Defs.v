@@ -435,16 +435,24 @@ End TestConcepts1.
 
 (** Let's write a function to check name repetitions. *)
 
+Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
+  match nmlist with
+  | [] => true
+  | nm :: nms => if ids_mem nm nmset 
+                 then false
+                 else  ids_are_unique_recur nms (ids_add nm nmset)
+  end.
+
 Definition ids_are_unique (names : list id) : bool :=
-  let 
-    fix check (nmlist : list id) (nmset : id_set) : bool
-    := match nmlist with
-       | [] => true
-       | nm :: nms => if ids_mem nm nmset 
-                      then false
-                      else check nms (ids_add nm nmset)
-       end
+  let fix check (nmlist : list id) (nmset : id_set) : bool :=
+      match nmlist with
+      | [] => true
+      | nm :: nms => if ids_mem nm nmset 
+                     then false
+                     else  check nms (ids_add nm nmset)
+      end
   in check names ids_empty.
+  (* ids_are_unique_recur names ids_empty. *)
 
 (** And check it. *)
 
@@ -468,6 +476,16 @@ Qed.
 
 End TestIdsUniqueness1.
 
+(*
+Lemma ids_are_unique_recur_emptyset__true : forall (x : id),
+    ids_are_unique_recur l ids_empty = true.
+Proof.
+  intros l. unfold ids_are_unique_recur.
+  induction l as [| h l'].
+  - reflexivity.
+  -  simpl.
+*)
+
 (** [id_list_to_id_set] builds set from a list of ids. *)
 
 Definition id_list_to_id_set (l : list id) :=
@@ -480,7 +498,7 @@ Module IdSetProps := MSetProperties.WProperties IdSet.
 
 Print MSetFacts.WFactsOn.
 
-Lemma mem_eq_add : forall (x : id) (s : id_set),
+Lemma add_eq__mem_true : forall (x : id) (s : id_set),
     ids_mem x (ids_add x s) = true.
 Proof.
   Import IdSetFacts.
@@ -489,32 +507,114 @@ Proof.
   apply add_1. reflexivity.
 Qed.
 
-(*
-Lemma mem_neq_add : forall (x y : id) (s : id_set),
+Lemma add_neq__mem_ignore : forall (x y : id) (s : id_set),
     x <> y ->
     ids_mem y (ids_add x s) = ids_mem y s.
 Proof.
-  Import IdSetFacts. 
-  intros x y s. intros H. Check add_neq_iff.
+  intros x y s. intros H. 
   remember (add_neq_iff s H) as Hneq. clear HeqHneq.
-  
-  
-  reflexivity.
-  apply add_1. reflexivity.
+  repeat (rewrite <- IdSet.mem_spec in Hneq). 
+  unfold ids_mem, ids_add in *.
+  destruct (IdSet.mem y s) eqn:Hmem.
+  - apply Hneq. reflexivity.
+  - destruct (IdSet.mem y (ids_add x s)) eqn:Hmem'.
+    apply Hneq in Hmem'. inversion Hmem'.
+    assumption.
 Qed.
 
 Print IdSetFacts.
+
+(*
+Lemma c : forall (l : list id) (s : id_set) (x : id),
+    ids_are_unique_recur l (ids_add x s) = true -> 
+    ids_are_unique_recur l s = true.
+Proof.
+  intros l. induction l as [| h l' IHl'].
+  intros. reflexivity.
+  
+  intros s x. simpl. Print ids_are_unique_recur.
+  destruct (beq_idP h x).
+  + subst h. rewrite -> add_eq__mem_true.
+    intros Hcontra; inversion Hcontra.
+  + apply not_eq_sym in n as Hhx. 
+    apply add_neq__mem_ignore with (s := s) in Hhx.
+    rewrite -> Hhx. fold ids_are_unique_recur.
+    intros H.  apply
+    intros H.
+
+Abort.
+
+
+Lemma b : forall (l : list id) (s : id_set),
+    ids_are_unique_recur l s = true ->
+    (forall x, In x l -> ~ IdSet.In x s).
+Proof.
+  intros l. induction l as [| h l'].
+  - 
+    intros s Hids x Hin. inversion Hin.
+  - 
+    intros s Hids. simpl in Hids.
+    destruct (ids_mem h s) eqn:Hhs.
+    + inversion Hids.
+    + intros x Hin. intros Hsin.
+      inversion Hin. subst h.
+      apply IdSetFacts.mem_1 in Hsin.
+        unfold ids_mem in Hhs. rewrite Hsin in Hhs.
+        inversion Hhs.
+      
+
+
+Abort.
+
+Lemma a : forall (l : list id) (x : id),
+    ~ In x l ->
+    ids_are_unique l = true ->
+    ids_are_unique (x :: l) = true.
+Proof.
+  intros l. 
+  induction l as [ | h l']; intros x Hin Hids.
+  - (* l = nil *)
+    (* intros x Hin Hids. *) reflexivity. 
+  - (* l = h :: l' *)
+    (* intros x. *)
+    unfold ids_are_unique in *. simpl in *.
+    unfold ids_mem, ids_add, ids_empty in *.
+    destruct (beq_idP h x).
+    + (* h = x *)
+      subst h. unfold not in Hin.
+      assert (Hcontra: x = x \/ In x l') by (left; reflexivity).
+      apply Hin in Hcontra. inversion Hcontra.
+    + (* h <> x *)
+      rewrite -> add_neq__mem_ignore. simpl.
+      intros H.
+    
+
+Abort.
+
 
 Lemma ids_are_unique_cons : forall (x : id) (l : list id),
     ids_are_unique (x :: l) = true ->
     ids_are_unique l = true.
 Proof.
   Import IdSetFacts.
-  intros x [ | h l'].
+  intros x l. (* generalize dependent x. *)
+  induction l as [ | h l'].
   - (* l = nil *)
     intros []. reflexivity. 
   - (* l = h :: l' *)
-    unfold ids_are_unique. unfold ids_mem, ids_add, ids_empty.
+    (* intros x. *)
+    unfold ids_are_unique in *. 
+    unfold ids_mem, ids_add, ids_empty in *.
+    simpl in *.
+    destruct (beq_idP h x).
+    + (* h = x *)
+      subst h. rewrite -> add_eq__mem_true.
+      intros Hcontra. inversion Hcontra.
+    + (* h <> x *)
+      rewrite -> add_neq__mem_ignore. simpl.
+      intros H.
+      
+
     intros H. simpl in H.
     destruct (beq_idP h x).
     (* destruct (ids_mem h (ids_add x ids_empty)) eqn:Hhx. *)
@@ -535,6 +635,7 @@ Print IdSet.
 
 Abort.
 *)
+
 (*
 Lemma not_ids_are_unique__ex_dup : forall (x : id) (l : list id),
     ids_are_unique l = true ->
@@ -560,8 +661,34 @@ Print IdSet.
 Check MSetFacts.mem_iff.
 
 Check IdSet.mem_iff.
+*)
 
+(*
+Parameter elements_1 :
+  forall (s : M.t) (x : M.elt), M.In x s -> InA E.eq x (M.elements s).
+Parameter elements_2 :
+  forall (s : M.t) (x : M.elt), InA E.eq x (M.elements s) -> M.In x s.
 
+Parameter mem_spec : forall (s : t) (x : elt), mem x s = true <-> In x s.
+Parameter mem_1 :
+   forall (s : IdSet.t) (x : IdSet.elt),
+   IdSet.In x s -> IdSet.mem x s = true.
+Parameter mem_2 :
+   forall (s : IdSet.t) (x : IdSet.elt),
+   IdSet.mem x s = true -> IdSet.In x s.
+
+Inductive NoDup (A : Type) : list A -> Prop :=
+    NoDup_nil : NoDup []
+  | NoDup_cons : forall (x : A) (l : list A),
+                 ~ In x l -> NoDup l -> NoDup (x :: l)
+
+*) 
+
+(*
+elements (ids_add nm nmset)
+*)        
+
+(*
 Lemma ids_are_unique__NoDup : forall (l : list id),
     ids_are_unique l = true -> NoDup l.
 Proof.
@@ -569,16 +696,17 @@ Proof.
   - (* l = nil *)
     intros H. apply NoDup_nil.
   - (* l = h :: l' *)
-    unfold ids_are_unique.
+    unfold ids_are_unique, ids_are_unique_recur in *. 
     destruct (ids_mem h ids_empty) eqn:Hmem.
     + intros contra. inversion contra. 
     + clear Hmem.
-      unfold ids_are_unique in IHl'. simpl in IHl'.
+      unfold ids_are_unique in IHl'. 
       
       unfold IdSet.mem in Hmem.
  inversion Hmem.
 
-Abort.*)
+Abort.
+*)
 
 (*
 Definition map_nat_nat: Type := M.t nat.
