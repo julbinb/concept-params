@@ -8,6 +8,7 @@
 ./BasicPLDefs/Relations.v
 
 ./cpSTLC/cpSTLCa_Defs.v
+./cpSTLC/cpSTLCa_Props.v
 
 # VS := *.v
 

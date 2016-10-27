@@ -5,7 +5,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Thu, 20 Oct 2016
+   Last Update: Fri, 29 Oct 2016
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -24,9 +24,9 @@ Require Import ConceptParams.BasicPLDefs.Relations.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
+Require Import Coq.Bool.Bool.
 
 Require Import Coq.omega.Omega.
-
 
 (* ################################################################# *)
 (** ** Syntax *)
@@ -344,28 +344,6 @@ Inductive ty_valid (st : symbtable) : ty -> Prop :=
 
 (** Now we are ready to define a property "concept is well defined" *)
 
-(*
-Print List.NoDup.
-Inductive NoDup (A : Type) : list A -> Prop :=
-    NoDup_nil : List.NoDup nil
-  | NoDup_cons : forall (x : A) (l : list A), ~ List.In x l -> List.NoDup l -> List.NoDup (x :: l)
-
-Print List.In.
-List.In = 
-fun A : Type =>
-fix In (a : A) (l : list A) {struct l} : Prop :=
-  match l with
-  | nil => False
-  | (b :: m)%list => b = a \/ In a m
-  end
-     : forall A : Type, A -> list A -> Prop
-
-Print List.Forall.
-Inductive Forall (A : Type) (P : A -> Prop) : list A -> Prop :=
-    Forall_nil : List.Forall P nil
-  | Forall_cons : forall (x : A) (l : list A), P x -> List.Forall P l -> List.Forall P (x :: l)
-*)
-
 Definition concept_welldefined (st : symbtable) (C : conceptdef) : Prop :=
   match C with
     cpt_def cname cbody =>
@@ -380,7 +358,9 @@ Definition stempty := @empty cty.
 
 (** Let's check some examples *)
 
-Module TestConcepts1.
+
+(* Tests/ ------------------------------- *)
+Module TestConcepts1. 
 Import Examples.
   
 Example test_concept_1 : concept_welldefined stempty Cnrevmap.
@@ -421,19 +401,20 @@ Proof.
 Qed.
 
 End TestConcepts1.
+(* /Tests ------------------------------- *)
 
 (** There is a problem here: it's quite cumbersome to check 
     well-definedness of concept definitions in proposition style.
     We could implement auxuliary tactics to make proofs easier,
     but it's not very practical. 
 
-    It would be convenient to at least have an algorithm for 
+    It would be convenient to have an algorithm for 
     checking name repetitions in a concept definition.
     To check this, we need an effective set of ids. 
     The one based on AVL trees is defined in [Maps.v].
 *)
 
-(** Let's write a function to check name repetitions. *)
+(** Let's write a function [ids_are_unique] to check name repetitions. *)
 
 Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
   match nmlist with
@@ -444,18 +425,11 @@ Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
   end.
 
 Definition ids_are_unique (names : list id) : bool :=
-  let fix check (nmlist : list id) (nmset : id_set) : bool :=
-      match nmlist with
-      | [] => true
-      | nm :: nms => if ids_mem nm nmset 
-                     then false
-                     else  check nms (ids_add nm nmset)
-      end
-  in check names ids_empty.
-  (* ids_are_unique_recur names ids_empty. *)
+  ids_are_unique_recur names ids_empty.
 
-(** And check it. *)
+(** Check it on some examples. *)
 
+(* Tests/ ------------------------------- *)
 Module TestIdsUniqueness1.
 Import Examples.
   
@@ -475,238 +449,14 @@ Proof.
 Qed.
 
 End TestIdsUniqueness1.
+(* /Tests ------------------------------- *)
 
-(*
-Lemma ids_are_unique_recur_emptyset__true : forall (x : id),
-    ids_are_unique_recur l ids_empty = true.
-Proof.
-  intros l. unfold ids_are_unique_recur.
-  induction l as [| h l'].
-  - reflexivity.
-  -  simpl.
+(** We can also write a function [types_are_valid] to check that 
+    all types in a list are valid.
 *)
 
-(** [id_list_to_id_set] builds set from a list of ids. *)
-
-Definition id_list_to_id_set (l : list id) :=
-  fold_left (fun acc x => ids_add x acc) l ids_empty.
 
 
-Require Import MSets.MSetFacts.
-Module IdSetFacts := MSetFacts.WFacts IdSet.
-Module IdSetProps := MSetProperties.WProperties IdSet.
-
-Print MSetFacts.WFactsOn.
-
-Lemma add_eq__mem_true : forall (x : id) (s : id_set),
-    ids_mem x (ids_add x s) = true.
-Proof.
-  Import IdSetFacts.
-  intros x s. rewrite mem_1.
-  reflexivity.
-  apply add_1. reflexivity.
-Qed.
-
-Lemma add_neq__mem_ignore : forall (x y : id) (s : id_set),
-    x <> y ->
-    ids_mem y (ids_add x s) = ids_mem y s.
-Proof.
-  intros x y s. intros H. 
-  remember (add_neq_iff s H) as Hneq. clear HeqHneq.
-  repeat (rewrite <- IdSet.mem_spec in Hneq). 
-  unfold ids_mem, ids_add in *.
-  destruct (IdSet.mem y s) eqn:Hmem.
-  - apply Hneq. reflexivity.
-  - destruct (IdSet.mem y (ids_add x s)) eqn:Hmem'.
-    apply Hneq in Hmem'. inversion Hmem'.
-    assumption.
-Qed.
-
-Print IdSetFacts.
-
-(*
-Lemma c : forall (l : list id) (s : id_set) (x : id),
-    ids_are_unique_recur l (ids_add x s) = true -> 
-    ids_are_unique_recur l s = true.
-Proof.
-  intros l. induction l as [| h l' IHl'].
-  intros. reflexivity.
-  
-  intros s x. simpl. Print ids_are_unique_recur.
-  destruct (beq_idP h x).
-  + subst h. rewrite -> add_eq__mem_true.
-    intros Hcontra; inversion Hcontra.
-  + apply not_eq_sym in n as Hhx. 
-    apply add_neq__mem_ignore with (s := s) in Hhx.
-    rewrite -> Hhx. fold ids_are_unique_recur.
-    intros H.  apply
-    intros H.
-
-Abort.
-
-
-Lemma b : forall (l : list id) (s : id_set),
-    ids_are_unique_recur l s = true ->
-    (forall x, In x l -> ~ IdSet.In x s).
-Proof.
-  intros l. induction l as [| h l'].
-  - 
-    intros s Hids x Hin. inversion Hin.
-  - 
-    intros s Hids. simpl in Hids.
-    destruct (ids_mem h s) eqn:Hhs.
-    + inversion Hids.
-    + intros x Hin. intros Hsin.
-      inversion Hin. subst h.
-      apply IdSetFacts.mem_1 in Hsin.
-        unfold ids_mem in Hhs. rewrite Hsin in Hhs.
-        inversion Hhs.
-      
-
-
-Abort.
-
-Lemma a : forall (l : list id) (x : id),
-    ~ In x l ->
-    ids_are_unique l = true ->
-    ids_are_unique (x :: l) = true.
-Proof.
-  intros l. 
-  induction l as [ | h l']; intros x Hin Hids.
-  - (* l = nil *)
-    (* intros x Hin Hids. *) reflexivity. 
-  - (* l = h :: l' *)
-    (* intros x. *)
-    unfold ids_are_unique in *. simpl in *.
-    unfold ids_mem, ids_add, ids_empty in *.
-    destruct (beq_idP h x).
-    + (* h = x *)
-      subst h. unfold not in Hin.
-      assert (Hcontra: x = x \/ In x l') by (left; reflexivity).
-      apply Hin in Hcontra. inversion Hcontra.
-    + (* h <> x *)
-      rewrite -> add_neq__mem_ignore. simpl.
-      intros H.
-    
-
-Abort.
-
-
-Lemma ids_are_unique_cons : forall (x : id) (l : list id),
-    ids_are_unique (x :: l) = true ->
-    ids_are_unique l = true.
-Proof.
-  Import IdSetFacts.
-  intros x l. (* generalize dependent x. *)
-  induction l as [ | h l'].
-  - (* l = nil *)
-    intros []. reflexivity. 
-  - (* l = h :: l' *)
-    (* intros x. *)
-    unfold ids_are_unique in *. 
-    unfold ids_mem, ids_add, ids_empty in *.
-    simpl in *.
-    destruct (beq_idP h x).
-    + (* h = x *)
-      subst h. rewrite -> add_eq__mem_true.
-      intros Hcontra. inversion Hcontra.
-    + (* h <> x *)
-      rewrite -> add_neq__mem_ignore. simpl.
-      intros H.
-      
-
-    intros H. simpl in H.
-    destruct (beq_idP h x).
-    (* destruct (ids_mem h (ids_add x ids_empty)) eqn:Hhx. *)
-    + (* x = h *)
-      subst. rewrite -> mem_eq_add in H.
-      inversion H.
-    + (* x <> h *)
-       simpl.
-      
-      
-      rewrite <- not_mem_iff in Hhx. unfold not in Hhx.
-      
-      assert (Hremx: IdSet.elements (ids_add h ids_empty) = IdSet.elements (IdSet.remove x (ids_add h (ids_add x ids_empty)))). 
-      { unfold ids_add, ids_empty.
-        
-Print IdSet.    
-
-
-Abort.
-*)
-
-(*
-Lemma not_ids_are_unique__ex_dup : forall (x : id) (l : list id),
-    ids_are_unique l = true ->
-    ids_are_unique (x :: l) = false -> 
-    ids_mem x (id_list_to_id_set l) = true.
-Proof.
-  intros x l. induction l as [| h l' IHl'].
-  - (* l = nil *)
-    intros [] contra. unfold ids_are_unique in contra.
-    simpl in contra. inversion contra.
-  - (* l = h :: l' *)
-    
-
-Abort.
-
-
-Print MSetInterface.
-
-Import MSetFacts.
-
-Print IdSet.
-
-Check MSetFacts.mem_iff.
-
-Check IdSet.mem_iff.
-*)
-
-(*
-Parameter elements_1 :
-  forall (s : M.t) (x : M.elt), M.In x s -> InA E.eq x (M.elements s).
-Parameter elements_2 :
-  forall (s : M.t) (x : M.elt), InA E.eq x (M.elements s) -> M.In x s.
-
-Parameter mem_spec : forall (s : t) (x : elt), mem x s = true <-> In x s.
-Parameter mem_1 :
-   forall (s : IdSet.t) (x : IdSet.elt),
-   IdSet.In x s -> IdSet.mem x s = true.
-Parameter mem_2 :
-   forall (s : IdSet.t) (x : IdSet.elt),
-   IdSet.mem x s = true -> IdSet.In x s.
-
-Inductive NoDup (A : Type) : list A -> Prop :=
-    NoDup_nil : NoDup []
-  | NoDup_cons : forall (x : A) (l : list A),
-                 ~ In x l -> NoDup l -> NoDup (x :: l)
-
-*) 
-
-(*
-elements (ids_add nm nmset)
-*)        
-
-(*
-Lemma ids_are_unique__NoDup : forall (l : list id),
-    ids_are_unique l = true -> NoDup l.
-Proof.
-  intros l. induction l as [ | h l' IHl'].
-  - (* l = nil *)
-    intros H. apply NoDup_nil.
-  - (* l = h :: l' *)
-    unfold ids_are_unique, ids_are_unique_recur in *. 
-    destruct (ids_mem h ids_empty) eqn:Hmem.
-    + intros contra. inversion contra. 
-    + clear Hmem.
-      unfold ids_are_unique in IHl'. 
-      
-      unfold IdSet.mem in Hmem.
- inversion Hmem.
-
-Abort.
-*)
 
 (*
 Definition map_nat_nat: Type := M.t nat.
