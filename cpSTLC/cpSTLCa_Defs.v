@@ -5,7 +5,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Fri, 29 Oct 2016
+   Last Update: Sat, 30 Oct 2016
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -137,9 +137,9 @@ Inductive ty : Type :=
 Inductive tm : Type :=
   | tvar  : id -> tm               (* x *)
   | tapp  : tm -> tm -> tm         (* t1 t2 *)
-  | tabs  : id -> ty -> tm -> tm   (* \x:T.t *)
-  | tmapp : tm -> id -> tm         (* t # M *)
-  | tcabs  : id -> id -> tm -> tm  (* \c#C.t *)
+  | tabs  : id -> ty -> tm -> tm   (* \x:T11.t12 *)
+  | tmapp : tm -> id -> tm         (* t1 # M *)
+  | tcabs  : id -> id -> tm -> tm  (* \c#C.t1 *)
   | tcinvk : id -> id -> tm        (* c.f *)                                 
   | ttrue  : tm
   | tfalse : tm
@@ -151,7 +151,7 @@ Inductive tm : Type :=
   | tminus : tm -> tm -> tm        (* minus t1 t2 *)
   | tmult  : tm -> tm -> tm        (* mult t1 t2 *)
   | teqnat : tm -> tm -> tm        (* eqnat t1 t2 *)
-  | tle    : tm -> tm -> tm        (* le t1 t2 *)
+  | tlenat : tm -> tm -> tm        (* lenat t1 t2 *)
   | tlet   : id -> tm -> tm -> tm  (* let x = t1 in t2 *)                           
 .
 
@@ -297,44 +297,72 @@ End Examples.
 (** ** Typing *)
 
 (** To typecheck terms with concept parameters, we need an additional 
-    context with information about concepts: concept context,
-    just st typing context.
-    
-    There must be a global _symbol table_ with information about
+    context with information about concepts and models.
+
+    So we need a kind of a _symbol table_ with information about
     concepts and models.
  *)
+
+(** [tycontext] is a typing context: a map from ids to types. *)
+
+Definition tycontext := partial_map ty.
+
+(** Concept type [cty] contains information about members' types. 
+    For simplicity let's express it as a map from ids to types again.
+*)
+
+Inductive cty : Type := CTFuns : tycontext -> cty.
+
+(** Models are always defined for some concepts. Therefore, 
+    a list of members and their types is the same as in the 
+    corresponding concept. The only thing we need to know
+    about a model is its concept.
+
+    Thus, model type [mty] will only contain concept name. *)
+
+Inductive mty : Type := MTCpt : id -> mty.
+
+(** For further checks we need a _symbol table_ to store information
+    about concepts and models. We can either store both in one table,
+    or have separate tables for concepts and models.
+
+    For simplicity, we choose the second option. *)
+
+(** Concept symbol table is a map from concept names
+    to concept types [Ci -> CTi]. *)
+
+Definition cptcontext : Type := partial_map cty.
+
+(** Model symbol table is a map from model names
+    to model types [Mi -> MTi]. *)
+
+Definition mdlcontext : Type := partial_map mty.
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Concept Definitions *)
 
-(** Concept information: list of pairs (element name, element type) 
-    [(fi, Ti)].
- *)
-
-Definition cty : Type := list (id * ty).
-
 (* Examples / ---------------------------- *)
-Module ExamplesTypes.
+Module Examples_ConceptTypes.
   Export Examples.
   
-  Definition CTnrevmap := [
+  Definition CTnrevmap := CTFuns (from_list [
     (FNmap, TArrow TNat TNat);                          
     (FNpam, TArrow TNat TNat)
-  ].
+  ]).
   
-  Definition CTnmonoid := [
+  Definition CTnmonoid := CTFuns (from_list [
     (FNident, TNat);                          
     (FNop,    TArrow TNat TNat)
-  ].
+  ]).
 
-  Definition CTempty : cty := [].
+  Definition CTempty : cty := CTFuns (from_list []).
 
-  Definition CTbad1 := [
+  Definition CTbad1 := CTFuns (from_list [
     (FNmap, TArrow TNat TNat);                          
     (FNmap, TArrow TNat TNat)
-  ].
+  ]).
 
-End ExamplesTypes.
+End Examples_ConceptTypes.
 (* / Examples ---------------------------- *)
 
 (** Concept definition is Ok if names of concept elements are
@@ -345,25 +373,29 @@ End ExamplesTypes.
     So to check types validity, we need symbol table already.
 *)
 
-(** Symbol table is a map from concept names to concept types
-    [Ci -> CTi]. *)
-
-Definition symbtable : Type := partial_map cty.
-
 (** Now let's define a property "type is valid".
     This property must be checked againts concrete symbol table.
  *)
 
-Definition name_defined (st :  symbtable) (nm : id) : Prop := 
+Definition concept_defined (st : cptcontext) (nm : id) : Prop := 
   st nm <> None.
 
-Definition name_defined_b (st : symbtable) (nm : id) : bool :=
+Definition concept_defined_b (st : cptcontext) (nm : id) : bool :=
+  match st nm with
+  | None   => false
+  | Some _ => true
+  end.
+
+Definition model_defined (st : mdlcontext) (nm : id) : Prop := 
+  st nm <> None.
+
+Definition model_defined_b (st : mdlcontext) (nm : id) : bool :=
   match st nm with
   | None   => false
   | Some _ => true
   end.
   
-Inductive type_valid (st : symbtable) : ty -> Prop :=
+Inductive type_valid (st : cptcontext) : ty -> Prop :=
   | type_valid_nat   : type_valid st TNat
   | type_valid_bool  : type_valid st TBool
   | type_valid_arrow : forall T1 T2,
@@ -371,7 +403,7 @@ Inductive type_valid (st : symbtable) : ty -> Prop :=
       type_valid st T2 ->
       type_valid st (TArrow T1 T2)
   | type_valid_cpt   : forall C T,
-      name_defined st C ->
+      concept_defined st C ->
       type_valid st T ->
       type_valid st (TConceptPrm C T)
 .
@@ -380,7 +412,7 @@ Hint Constructors type_valid.
 
 (** Now we are ready to define a property "concept is well defined" *)
 
-Definition concept_welldefined (st : symbtable) (C : conceptdef) : Prop :=
+Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
   match C with
     cpt_def cname cbody =>
     let (fnames, ftypes) := split (map namedecl_to_pair cbody) in
@@ -509,20 +541,20 @@ End TestIdsUniqueness1.
     all types in a list are valid.
 *)
 
-Fixpoint type_valid_b (st : symbtable) (t : ty) : bool :=
+Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
   match t with
   | TNat  => true
   | TBool => true
   | TArrow t1 t2     => andb (type_valid_b st t1)  (type_valid_b st t2)
-  | TConceptPrm c t1 => andb (name_defined_b st c) (type_valid_b st t1)
+  | TConceptPrm c t1 => andb (concept_defined_b st c) (type_valid_b st t1)
   end.
 
-Definition types_valid_b (st : symbtable) (ts : list ty) : bool :=
+Definition types_valid_b (st : cptcontext) (ts : list ty) : bool :=
   List.forallb (fun t => type_valid_b st t) ts.
 
 (** And define a function to check that "concept is well defined" *)
 
-Definition concept_welldefined_b (st : symbtable) (C : conceptdef) : bool :=
+Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
   match C with
     cpt_def cname cbody =>
     let (fnames, ftypes) := split (map namedecl_to_pair cbody) in
@@ -558,7 +590,7 @@ End TestConcepts1_b.
 
 (* Tests / ------------------------------- *)
 Module TestTypes1. 
-  Import ExamplesTypes.
+  Import Examples_ConceptTypes.
   
   Example test_type_1 : type_valid stempty TNat.
   Proof.
@@ -570,7 +602,7 @@ Module TestTypes1.
   Example test_type_2_1 : ~ (type_valid stempty (TConceptPrm CNnmonoid tyNatBoolNat)).
   Proof.
     intros H. inversion H; subst.
-    unfold name_defined in H2.
+    unfold concept_defined in H2.
     assert (Hcontra : stempty CNnmonoid = None) by reflexivity.
     tryfalse.
   Qed.
@@ -579,13 +611,13 @@ Module TestTypes1.
     type_valid (update stempty CNnmonoid CTnmonoid) (TConceptPrm CNnmonoid tyNatBoolNat).
   Proof.
     apply type_valid_cpt.
-    + unfold name_defined. intros Hnm. tryfalse.
+    + unfold concept_defined. intros Hnm. tryfalse.
     + apply type_valid_arrow; auto.
   Qed.
 End TestTypes1.
 
 Module TestTypes1_b. 
-  Import ExamplesTypes.
+  Import Examples_ConceptTypes.
   
   Example test_type_1 : (type_valid_b stempty TNat) = true.
   Proof. reflexivity. Qed.
@@ -603,38 +635,220 @@ Module TestTypes1_b.
 End TestTypes1_b.
 (* / Tests ------------------------------- *)
 
-(** At this point we cannot do more on contexts. To check models
-    we have to be able to check terms (function definitions). 
+(** At this point we cannot do more on contexts. To check models,
+    we have to be able to typecheck terms (function definitions). 
     But terms may conist of model applications.
-
-    Therefore, typing of terms and models are mutually recursive.
-*)
+ *)
 
 (* ================================================================= *)
-(** *** Typing of terms *)
+(** *** Typing of Terms *)
 
-(*
-Inductive tm : Type :=
-  | tvar  : id -> tm               (* x *)
-  | tapp  : tm -> tm -> tm         (* t1 t2 *)
-  | tabs  : id -> ty -> tm -> tm   (* \x:T.t *)
-  | tmapp : tm -> id -> tm         (* t # M *)
-  | tcabs  : id -> id -> tm -> tm  (* \c#C.t *)
-  | tcinvk : id -> id -> tm        (* c.f *)                                 
-  | ttrue  : tm
-  | tfalse : tm
-  | tif : tm -> tm -> tm -> tm     (* if t1 then t2 else t3 *)
-  | tnat   : nat -> tm             (* n *)
-  | tsucc  : tm -> tm              (* succ t1 *) 
-  | tpred  : tm -> tm              (* pred t1 *)
-  | tplus  : tm -> tm -> tm        (* plus t1 t2 *)
-  | tminus : tm -> tm -> tm        (* minus t1 t2 *)
-  | tmult  : tm -> tm -> tm        (* mult t1 t2 *)
-  | teqnat : tm -> tm -> tm        (* eqnat t1 t2 *)
-  | tle    : tm -> tm -> tm        (* le t1 t2 *)
-  | tlet   : id -> tm -> tm -> tm  (* let x = t1 in t2 *) 
-.
+(** To typecheck terms we need:
+    - context [Gamma], which (in contrast to STLC) contains not only
+      variables, but also concept variables;      
+    - concept symbol table [CTable];
+    - model symbol table [MTable].
 *)
+
+(** Informal typing rules are listed below.
+    
+    We can read the five-place relation 
+      [CTable * MTable ; Gamma |- t \in T] as:
+    "to the term [t] we can assign the type [T],
+     if types of free variables of [t] are specified in [Gamma],
+     free concept variables of [t] are specified in [Gamma], 
+     context types are specified in [CTable],
+     model types are specified in [MTable]."
+
+    [dom( * )]   is a domain of a map (map keys -- ids),
+    [range( * )] is a range of a map (map values -- types).
+
+
+                             Gamma \has x:T
+                    --------------------------------                    (T_Var)
+                    CTable * MTable ; Gamma |- x : T
+
+
+                 CTable * MTable ; Gamma |- t1 : T11->T12
+                  CTable * MTable ; Gamma |- t2 : T11
+                 ----------------------------------------               (T_App)
+                  CTable * MTable ; Gamma |- t1 t2 : T12
+
+
+              CTable * MTable ; (Gamma , x:T11) |- t12 : T12
+             ------------------------------------------------           (T_Abs)
+             CTable * MTable ; Gamma |- \x:T11.t12 : T11->T12
+
+
+- MTable contains info about model M
+- Model M implements concept C
+  (MTable(M) = ... of C ...)
+
+                              M \in dom(MTable)
+                         MTable(M) = ... of C ...
+                 CTable * MTable ; Gamma |- t1 : (C # T1)
+                 ----------------------------------------              (T_MApp)
+                 CTable * MTable ; Gamma |- (t1 # M) : T1   
+
+
+              CTable * MTable ; (Gamma , c#C) |- t1 : T1
+             --------------------------------------------------        (T_CAbs)
+             CTable * MTable ; Gamma |- \c#C.t1 : (C # T1)
+
+
+- CTable contains info about concept C;
+- C contains member f and its type is TF 
+  (CTable(C) = ... f : TF ... )
+
+                              Gamma \has c#C
+                             C \in dom(CTable)
+                        CTable(C) = ... f : TF ...
+                   -----------------------------------                (T_CInvk)
+                   CTable * MTable ; Gamma |- c.f : TF
+
+
+                  ------------------------------------                 (T_True)
+                 CTable * MTable ; Gamma |- true : Bool
+
+                  ------------------------------------                (T_False)
+                 CTable * MTable ; Gamma |- false : Bool
+
+
+                  CTable * MTable ; Gamma |- t1 : Bool    
+                   CTable * MTable ; Gamma |- t2 : T    
+                   CTable * MTable ; Gamma |- t3 : T
+            ---------------------------------------------------          (T_If)
+           CTable * MTable ; Gamma |- if t1 then t2 else t3 : T
+
+
+                  -------------------------------------                 (T_Nat)
+                 CTable * MTable ; Gamma |- tnat n : Nat
+
+
+                   CTable * MTable ; Gamma |- t1 : Nat
+                ------------------------------------------             (T_Succ)
+                CTable * MTable ; Gamma |- succ t1 : Nat
+
+                   CTable * MTable ; Gamma |- t1 : Nat
+                ------------------------------------------             (T_Pred)
+                CTable * MTable ; Gamma |- pred t1 : Nat
+
+
+                   CTable * MTable ; Gamma |- t1 : Nat
+                   CTable * MTable ; Gamma |- t2 : Nat
+                ----------------------------------------               (T_Plus)
+                CTable * MTable ; Gamma |- t1 + t2 : Nat
+
+                   CTable * MTable ; Gamma |- t1 : Nat
+                   CTable * MTable ; Gamma |- t2 : Nat
+                ----------------------------------------              (T_Minus)
+                CTable * MTable ; Gamma |- t1 - t2 : Nat
+
+                   CTable * MTable ; Gamma |- t1 : Nat
+                   CTable * MTable ; Gamma |- t2 : Nat
+                ---------------------------------------                (T_Mult)
+                CTable * MTable ; Gamma |- t1 * t2 : Nat
+
+
+                    CTable * MTable ; Gamma |- t1 : Nat
+                    CTable * MTable ; Gamma |- t2 : Nat
+                ------------------------------------------            (T_EqNat)
+                 CTable * MTable ; Gamma |- t1 = t2 : Bool
+
+                   CTable * MTable ; Gamma |- t1 : Nat
+                   CTable * MTable ; Gamma |- t2 : Nat
+                ------------------------------------------            (T_LeNat)
+                CTable * MTable ; Gamma |- t1 <= t2 : Bool
+
+
+                    CTable * MTable ; Gamma |- t1 : T1 
+               CTable * MTable ; (Gamma , x:T1) |- t2 : T2
+               ----------------------------------------------           (T_Let)
+               CTable * MTable ; Gamma |- let x=t1 in t2 : T2
+*)
+
+(** In SLTC Gamma consists of only variable types, 
+    but now it can also information about concept parameters.
+*)
+
+Inductive ctxvarty : Type :=
+  (* type of term variable [x : T] -- normal type *)
+| tmtype  : ty -> ctxvarty
+  (* type of concept parameter [c # C] -- concept name *)
+| cpttype : id -> ctxvarty
+.
+
+Definition context : Type := partial_map ctxvarty.
+
+Reserved Notation "CTable '*' MTable ';' Gamma '|-' t '\in' T" (at level 40).
+
+Definition concept_fun_member (CTable : cptcontext) (C : id) (f : id) (TF : ty) : Prop :=
+  match CTable C with
+  | None => False
+  | Some (CTFuns fundefs) => fundefs f = Some TF
+  end.
+
+Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop :=
+  | T_Var   : forall CTable MTable Gamma x T,
+      Gamma x = Some (tmtype T) ->
+      CTable * MTable ; Gamma |- tvar x \in T
+  | T_App   : forall CTable MTable Gamma t1 t2 T11 T12,
+      CTable * MTable ; Gamma |- t1 \in T11 ->
+      CTable * MTable ; Gamma |- t2 \in T12 ->                 
+      CTable * MTable ; Gamma |- tapp t1 t2 \in T12
+  | T_Abs   : forall CTable MTable Gamma x t12 T11 T12,
+      CTable * MTable ; (update Gamma x (tmtype T11)) |- t12 \in T12 ->                 
+      CTable * MTable ; Gamma |- tabs x T11 t12 \in T12
+  | T_MApp  : forall CTable MTable Gamma t1 M C T1,
+      MTable M = Some (MTCpt C) ->
+      CTable * MTable ; Gamma |- t1 \in TConceptPrm C T1 ->
+      CTable * MTable ; Gamma |- tmapp t1 M \in T1
+  | T_CAbs  : forall CTable MTable Gamma c t1 C T1,
+      CTable * MTable ; (update Gamma c (cpttype C)) |- t1 \in T1 ->
+      CTable * MTable ; Gamma |- tcabs c C t1 \in TConceptPrm C T1
+  | T_CInvk : forall CTable MTable Gamma c f C TF,
+      Gamma c = Some (cpttype C) ->
+      concept_fun_member CTable C f TF ->
+      CTable * MTable ; Gamma |- tcinvk c f \in TF
+  | T_True  : forall CTable MTable Gamma,
+      CTable * MTable ; Gamma |- ttrue \in TBool
+  | T_False : forall CTable MTable Gamma,
+      CTable * MTable ; Gamma |- tfalse \in TBool
+  | T_If    : forall CTable MTable Gamma t1 t2 t3 T,
+      CTable * MTable ; Gamma |- t1 \in TBool ->
+      CTable * MTable ; Gamma |- t2 \in T ->
+      CTable * MTable ; Gamma |- t3 \in T ->
+      CTable * MTable ; Gamma |- tif t1 t2 t3 \in T
+  | T_Nat   : forall CTable MTable Gamma n,
+      CTable * MTable ; Gamma |- tnat n \in TNat
+  | T_Succ   : forall CTable MTable Gamma t1,
+      CTable * MTable ; Gamma |- t1 \in TNat ->
+      CTable * MTable ; Gamma |- tsucc t1 \in TNat                                                    | T_Pred   : forall CTable MTable Gamma t1,
+      CTable * MTable ; Gamma |- t1 \in TNat ->
+      CTable * MTable ; Gamma |- tpred t1 \in TNat                                                    | T_Plus   : forall CTable MTable Gamma t1 t2,
+      CTable * MTable ; Gamma |- t1 \in TNat ->
+      CTable * MTable ; Gamma |- t2 \in TNat ->
+      CTable * MTable ; Gamma |- tplus t1 t2 \in TNat                                                 | T_Minus  : forall CTable MTable Gamma t1 t2,
+      CTable * MTable ; Gamma |- t1 \in TNat ->
+      CTable * MTable ; Gamma |- t2 \in TNat ->
+      CTable * MTable ; Gamma |- tminus t1 t2 \in TNat                                                | T_Mult   : forall CTable MTable Gamma t1 t2,
+      CTable * MTable ; Gamma |- t1 \in TNat ->
+      CTable * MTable ; Gamma |- t2 \in TNat ->
+      CTable * MTable ; Gamma |- tmult t1 t2 \in TNat                                                 | T_EqNat  : forall CTable MTable Gamma t1 t2,
+      CTable * MTable ; Gamma |- t1 \in TNat ->
+      CTable * MTable ; Gamma |- t2 \in TNat ->
+      CTable * MTable ; Gamma |- teqnat t1 t2 \in TBool                                               | T_LeNat  : forall CTable MTable Gamma t1 t2,
+      CTable * MTable ; Gamma |- t1 \in TNat ->
+      CTable * MTable ; Gamma |- t2 \in TNat ->
+      CTable * MTable ; Gamma |- tlenat t1 t2 \in TBool                                               | T_Let    : forall CTable MTable Gamma x t1 t2 T1 T2,
+      CTable * MTable ; Gamma |- t1 \in T1 ->
+      CTable * MTable ; (update Gamma x (tmtype T1)) |- t2 \in T2 ->
+      CTable * MTable ; Gamma |- tlet x t1 t2 \in T2                          
+
+where "CTable '*' MTable ';' Gamma '|-' t '\in' T"
+      := (has_type CTable MTable Gamma t T).
+
+Hint Constructors has_type.
 
 
 (* ################################################################# *)

@@ -1,8 +1,8 @@
 (* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
-(* Borrowed from Sofware Foundations, v.4 
+(* Mainly borrowed from Sofware Foundations, v.4 
    $Date: 2015-12-11 17:17:29 -0500 (Fri, 11 Dec 2015) $
 
-   Last Update: Mon, 17 Oct 2016
+   Last Update: Sat, 29 Oct 2016
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -261,7 +261,17 @@ Definition t_empty {A : Type} (v : A) : total_map A :=
 
 Definition t_update {A : Type} (m : total_map A)
                     (x : id) (v : A)
-:= fun x' => if beq_id x x' then v else m x'.
+  := fun x' => if beq_id x x' then v else m x'.
+
+(** For building examples easier, we define a function that creates
+    total map from a list of pairs.
+    [xs] : list of pairs, [dv] : default value.
+*)
+
+Definition t_from_list {A : Type} (xs : list (id * A)) (dv : A) : total_map A
+  := fold_left
+       (fun m xv => match xv with (x, v) => t_update m x v end)
+       xs (t_empty dv).
 
 (* ----------------------------------------------------------------- *)
 (** ** Properties of Total Maps *)
@@ -368,6 +378,14 @@ Definition empty {A : Type} : partial_map A :=
 Definition update {A : Type} (m : partial_map A)
                   (x : id) (v : A) :=
   t_update m x (Some v).
+
+(** Similarly to total maps, we define a function for creating 
+    maps from lists. *)
+
+Definition from_list {A : Type} (xs : list (id * A)) : partial_map A
+  := fold_left
+       (fun m xv => match xv with (x, v) => update m x v end)
+       xs empty.
 
 (** We can now lift all of the basic lemmas about total maps to
     partial maps. *)
