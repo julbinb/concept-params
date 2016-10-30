@@ -174,6 +174,7 @@ Definition namedecl_to_pair (nmdecl : namedecl) : (id * ty) :=
 (** List of name declarations *)
 
 Definition namedecl_list : Type := list namedecl.
+Hint Unfold namedecl_list.
 
 (** Concept definition *)
 
@@ -184,6 +185,7 @@ Inductive conceptdef : Type :=
 (** Concept declarations Section *)
 
 Definition conceptsec : Type := list conceptdef.
+Hint Unfold conceptsec.
 
 (* ----------------------------------------------------------------- *)
 (** **** Models *)
@@ -203,6 +205,7 @@ Definition namedef_to_pair (nmdef : namedef) : (id * tm) :=
 (** List of name definitions *)
 
 Definition namedef_list : Type := list namedef.
+Hint Unfold namedef_list.
 
 (** Model definition *)
 
@@ -213,6 +216,7 @@ Inductive modeldef : Type :=
 (** Model declarations Section *)
 
 Definition modelsec : Type := list modeldef.
+Hint Unfold modelsec.
 
 (* ----------------------------------------------------------------- *)
 (** **** Program *)
@@ -245,6 +249,7 @@ Module Examples.
   Definition MNnfoo := Id 15.
   Definition MNbbar1 := Id 16.
   Definition MNbbar2 := Id 17.
+  Definition MNnbar := Id 18.
 
   (** Var names *)
 
@@ -273,7 +278,7 @@ Module Examples.
     cpt_def
       (* name *) CNnmonoid
       (* body *) [
-                   nm_decl FNident TNat;               (* ident : Nat   *)                    
+                   nm_decl FNident TNat;             (* ident : Nat   *)                    
                    nm_decl FNop (TArrow TNat TNat)   (* op : Nat -> Nat -> Nat *)
                  ].
 
@@ -289,7 +294,77 @@ Module Examples.
                    nm_decl FNmap (TArrow TNat TNat); (* map : Nat -> Nat  *)                    
                    nm_decl FNmap (TArrow TNat TNat)  (* map : Nat -> Nat  *)
                  ].
+  
+  (** Model definitions *)
 
+  Definition Mnrm_plus1 : modeldef :=
+    mdl_def
+      (* name *)    MNnrm_plus1
+      (* concept *) CNnrevmap
+      (* body *)    [
+                      (* map = \x:Nat.succ x *)
+                      nm_def FNmap (tabs vx TNat (tsucc (tvar vx)));
+                      (* pam = \x:Nat.pred x *)
+                      nm_def FNpam (tabs vx TNat (tpred (tvar vx)))
+                    ].
+
+  Definition Mnrm_ident : modeldef :=
+    mdl_def
+      (* name *)    MNnrm_ident
+      (* concept *) CNnrevmap
+      (* body *)    [
+                      (* map = \x:Nat.x *)
+                      nm_def FNmap (tabs vx TNat (tvar vx));
+                      (* pam = \x:Nat.x *)
+                      nm_def FNpam (tabs vx TNat (tvar vx))
+                    ].
+
+  Definition Mnmnd_plus : modeldef :=
+    mdl_def
+      (* name *)    MNnmnd_plus
+      (* concept *) CNnmonoid
+      (* body *)    [
+                      (* ident = 0 *)
+                      nm_def FNident (tnat 0);
+                      (* op = \x:Nat.\y:Nat. x + y *)
+                      nm_def FNop (tabs vx TNat (tabs vy TNat
+                                    (tplus (tvar vx) (tvar vy))))
+                    ].
+
+  Definition Mnmnd_mult : modeldef :=
+    mdl_def
+      (* name *)    MNnmnd_mult
+      (* concept *) CNnmonoid
+      (* body *)    [
+                      (* ident = 1 *)
+                      nm_def FNident (tnat 1);
+                      (* op = \x:Nat.\y:Nat. x * y *)
+                      nm_def FNop (tabs vx TNat (tabs vy TNat
+                                    (tmult (tvar vx) (tvar vy))))
+                    ].
+
+  (* not all members are defined *)
+  Definition Mnmnd_bad1 : modeldef :=
+    mdl_def
+      (* name *)    MNnfoo
+      (* concept *) CNnmonoid
+      (* body *)    [
+                      (* ident = 1 *)
+                      nm_def FNident (tnat 1)
+                    ].
+
+(* types of members are not correct *)
+  Definition Mnmnd_bad2 : modeldef :=
+    mdl_def
+      (* name *)    MNnbar
+      (* concept *) CNnmonoid
+      (* body *)    [
+                      (* ident = 0 *)
+                      nm_def FNident (tnat 0);
+                      (* op = \x:Nat.x *)
+                      nm_def FNop (tabs vx TNat (tvar vx))
+                    ].
+  
 End Examples.
 
 
@@ -381,15 +456,6 @@ Definition concept_defined (st : cptcontext) (nm : id) : Prop :=
   st nm <> None.
 
 Definition concept_defined_b (st : cptcontext) (nm : id) : bool :=
-  match st nm with
-  | None   => false
-  | Some _ => true
-  end.
-
-Definition model_defined (st : mdlcontext) (nm : id) : Prop := 
-  st nm <> None.
-
-Definition model_defined_b (st : mdlcontext) (nm : id) : bool :=
   match st nm with
   | None   => false
   | Some _ => true
@@ -849,6 +915,76 @@ where "CTable '*' MTable ';' Gamma '|-' t '\in' T"
       := (has_type CTable MTable Gamma t T).
 
 Hint Constructors has_type.
+
+(* ----------------------------------------------------------------- *)
+(** **** Checking Model Definitions *)
+
+(* Examples / ---------------------------- *)
+Module Examples_ModelTypes.
+  Export Examples.
+  
+  Definition MTnrm_plus1 := MTCpt CNnrevmap.
+ 
+  Definition MTnrm_ident := MTCpt CNnrevmap.
+
+  Definition MTnmnd_plus := MTCpt CNnmonoid.
+
+  Definition MTnmnd_mult := MTCpt CNnmonoid.
+
+  Definition MTbad1 := MTCpt CNnfoo.
+
+End Examples_ModelTypes.
+(* / Examples ---------------------------- *)
+
+(** Model definition is Ok if:
+    - concept name is defined;
+    - all concept members are defined in a model;
+    - model member types coincide with concept member types.
+*)
+
+(** Now let's define a property "type is valid".
+    This property must be checked againts concrete symbol table.
+ *)
+
+Definition model_defined (st : mdlcontext) (nm : id) : Prop := 
+  st nm <> None.
+
+Definition model_defined_b (st : mdlcontext) (nm : id) : bool :=
+  match st nm with
+  | None   => false
+  | Some _ => true
+  end.
+
+(*
+Inductive type_valid (st : cptcontext) : ty -> Prop :=
+  | type_valid_nat   : type_valid st TNat
+  | type_valid_bool  : type_valid st TBool
+  | type_valid_arrow : forall T1 T2,
+      type_valid st T1 ->
+      type_valid st T2 ->
+      type_valid st (TArrow T1 T2)
+  | type_valid_cpt   : forall C T,
+      concept_defined st C ->
+      type_valid st T ->
+      type_valid st (TConceptPrm C T)
+.
+
+Hint Constructors type_valid. 
+
+(** Now we are ready to define a property "concept is well defined" *)
+
+Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
+  match C with
+    cpt_def cname cbody =>
+    let (fnames, ftypes) := split (map namedecl_to_pair cbody) in
+    (** all names are distinct *)
+    List.NoDup fnames
+    (** and all types are valid *)
+    /\ List.Forall (fun ftype => type_valid st ftype) ftypes            
+  end.
+
+Hint Unfold concept_welldefined.
+*)
 
 
 (* ################################################################# *)
