@@ -236,7 +236,14 @@ Hint Unfold ids_add.
 (** Make singleton set  *)
 
 Definition ids_singleton := IdSet.singleton.
-Hint Unfold ids_singleton. 
+Hint Unfold ids_singleton.
+
+(** [set_from_list] builds a set of ids from a list of ids. *)
+
+Definition set_from_list (xs : list id) : id_set
+  := fold_left
+       (fun s x => ids_add x s)
+       xs ids_empty.
 
 (* ================================================================= *)
 (** ** Map of Identifiers *)

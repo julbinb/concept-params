@@ -131,6 +131,49 @@ Inductive ty : Type :=
   | TConceptPrm : id -> ty -> ty   (* C # T *)
 .
 
+Fixpoint beq_ty (T1 T2 : ty) : bool :=
+  match T1, T2 with
+  | TBool, TBool => true
+  | TNat,  TNat  => true 
+  | TArrow T11 T12, TArrow T21 T22 =>
+      andb (beq_ty T11 T21) (beq_ty T12 T22)
+  | TConceptPrm C1 T1, TConceptPrm C2 T2 =>
+      andb (beq_id C1 C2) (beq_ty T1 T2)
+  | _, _ => false
+  end.
+
+Lemma beq_ty_refl : forall T1, beq_ty T1 T1 = true.
+Proof.
+  intros T1. induction T1; (simpl; auto).
+  - (* T1 -> T2 *)
+    rewrite -> IHT1_1. rewrite -> IHT1_2. reflexivity.
+  - (* C # T *)
+    rewrite -> IHT1. rewrite <- beq_id_refl. reflexivity.
+Qed.
+
+Lemma beq_ty__eq : forall T1 T2,
+    beq_ty T1 T2 = true -> T1 = T2.
+Proof.
+  intros T1. induction T1;
+  (intros T2; induction T2; intros H);
+    (* in some cases it's just reflexivity *)
+    try reflexivity;
+    (* in other cases we have impossible equalities as assumptions 
+       (such as TNat = TBool) *)
+    try solve_by_invert.
+  - (* T1_1 -> T1_2 = T2_1 -> T2_2 *)
+    simpl in H. apply andb_true_iff in H.
+    inversion H as [H1 H2].
+    apply IHT1_1 in H1. apply IHT1_2 in H2.
+    subst. reflexivity.
+  - (* C1 # T1 = C2 # T2 *)
+    simpl in H. apply andb_true_iff in H.
+    inversion H as [HC HT].
+    rewrite -> beq_id_true_iff in HC. subst.
+    apply IHT1 in HT. subst.
+    reflexivity.
+Qed.  
+
 (* ----------------------------------------------------------------- *)
 (** **** Terms *)
 
@@ -169,7 +212,6 @@ Definition namedecl_to_pair (nmdecl : namedecl) : (id * ty) :=
   match nmdecl with
     nm_decl fname ftype => (fname, ftype)
   end.
-
 
 (** List of name declarations *)
 
@@ -401,10 +443,22 @@ Hint Unfold tycontext.
 Definition id_ty_map := id_map ty.
 Hint Unfold id_ty_map.
 
-Inductive cty : Type := CTdef : id_ty_map -> cty.
+Inductive cty : Type := CT_def : id_ty_map -> cty.
 
 Definition find_ty := mids_find ty.
 Hint Unfold find_ty.
+
+Definition beq_cty (CT1 CT2 : cty) : bool :=
+  match CT1, CT2 with
+    CT_def c1, CT_def c2 => IdMap.equal beq_ty c1 c2            
+  end.
+
+(*Lemma beq_cty_refl : forall CT1, beq_cty CT1 CT1 = true.
+Proof.
+  intros CT1. induction CT1; simpl.
+  apply IdMap.equal_1.
+  unfold IdMap.Equivb. unfold IdMap.Equiv.
+Qed.*)
 
 (** Models are always defined for some concepts. Therefore, 
     a list of members and their types must be the same as in
@@ -437,11 +491,13 @@ Hint Unfold find_tm.
     to concept types [Ci -> CTi]. *)
 
 Definition cptcontext : Type := partial_map cty.
+Definition cstempty : cptcontext := @empty cty.
 
 (** Model symbol table is a map from model names
     to model types [Mi -> MTi]. *)
 
 Definition mdlcontext : Type := partial_map mty.
+Definition mstempty : mdlcontext := @empty mty.
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Concept Definitions *)
@@ -450,19 +506,19 @@ Definition mdlcontext : Type := partial_map mty.
 Module Examples_ConceptTypes.
   Export Examples.
   
-  Definition CTnrevmap := CTdef (map_from_list [
+  Definition CTnrevmap := CT_def (map_from_list [
     (FNmap, TArrow TNat TNat);                          
     (FNpam, TArrow TNat TNat)
   ]).
   
-  Definition CTnmonoid := CTdef (map_from_list [
+  Definition CTnmonoid := CT_def (map_from_list [
     (FNident, TNat);                          
     (FNop,    TArrow TNat TNat)
   ]).
 
-  Definition CTempty : cty := CTdef (map_from_list []).
+  Definition CTempty : cty := CT_def (map_from_list []).
 
-  Definition CTbad1 := CTdef (map_from_list [
+  Definition CTbad1 := CT_def (map_from_list [
     (FNmap, TArrow TNat TNat);                          
     (FNmap, TArrow TNat TNat)
   ]).
@@ -519,8 +575,6 @@ Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
   end.
 
 Hint Unfold concept_welldefined.
-  
-Definition stempty := @empty cty.
 
 (** Let's check some examples *)
 
@@ -528,7 +582,7 @@ Definition stempty := @empty cty.
 Module TestConcepts1. 
   Import Examples.
   
-  Example test_concept_1 : concept_welldefined stempty Cnrevmap.
+  Example test_concept_1 : concept_welldefined cstempty Cnrevmap.
   Proof.
     unfold concept_welldefined, Cnrevmap.
     simpl.
@@ -551,7 +605,7 @@ Module TestConcepts1.
       (* auto.*)
   Qed.
 
-  Example test_concept_2 : concept_welldefined stempty Cempty.
+  Example test_concept_2 : concept_welldefined cstempty Cempty.
   Proof.
     unfold concept_welldefined, Cnrevmap.
     simpl.
@@ -562,7 +616,7 @@ Module TestConcepts1.
       apply Forall_nil.
   Qed.
 
-  Example test_concept_3 : ~ (concept_welldefined stempty Cbad1). 
+  Example test_concept_3 : ~ (concept_welldefined cstempty Cbad1). 
   Proof.
     unfold concept_welldefined, Cnrevmap.
     simpl. intros [HDup HTy].
@@ -571,7 +625,7 @@ Module TestConcepts1.
     apply H1 in Contra. contradiction.
   Qed.
 
-  Example test_concept_4 : concept_welldefined stempty Cnmonoid. 
+  Example test_concept_4 : concept_welldefined cstempty Cnmonoid. 
   Proof.
     unfold concept_welldefined, Cnmonoid.
     simpl. split.
@@ -667,16 +721,16 @@ Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
 Module TestConcepts1_b. 
   Import Examples.
   
-  Example test_concept_1 : (concept_welldefined_b stempty Cnrevmap) = true.
+  Example test_concept_1 : (concept_welldefined_b cstempty Cnrevmap) = true.
   Proof. reflexivity. Qed.
 
-  Example test_concept_2 : (concept_welldefined_b stempty Cempty) = true.
+  Example test_concept_2 : (concept_welldefined_b cstempty Cempty) = true.
   Proof. reflexivity. Qed.
 
-  Example test_concept_3 : (concept_welldefined_b stempty Cbad1) = false. 
+  Example test_concept_3 : (concept_welldefined_b cstempty Cbad1) = false. 
   Proof. reflexivity. Qed.
 
-  Example test_concept_4 :  (concept_welldefined_b stempty Cnmonoid) = true.
+  Example test_concept_4 :  (concept_welldefined_b cstempty Cnmonoid) = true.
   Proof. reflexivity. Qed.
                            
 End TestConcepts1_b.
@@ -688,23 +742,23 @@ End TestConcepts1_b.
 Module TestTypes1. 
   Import Examples_ConceptTypes.
   
-  Example test_type_1 : type_valid stempty TNat.
+  Example test_type_1 : type_valid cstempty TNat.
   Proof.
     apply type_valid_nat.
   Qed.
 
   Definition tyNatBoolNat : ty := TArrow TNat (TArrow TBool TNat).
   
-  Example test_type_2_1 : ~ (type_valid stempty (TConceptPrm CNnmonoid tyNatBoolNat)).
+  Example test_type_2_1 : ~ (type_valid cstempty (TConceptPrm CNnmonoid tyNatBoolNat)).
   Proof.
     intros H. inversion H; subst.
     unfold concept_defined in H2.
-    assert (Hcontra : stempty CNnmonoid = None) by reflexivity.
+    assert (Hcontra : cstempty CNnmonoid = None) by reflexivity.
     tryfalse.
   Qed.
   
   Example test_type_2_2 :
-    type_valid (update stempty CNnmonoid CTnmonoid) (TConceptPrm CNnmonoid tyNatBoolNat).
+    type_valid (update cstempty CNnmonoid CTnmonoid) (TConceptPrm CNnmonoid tyNatBoolNat).
   Proof.
     apply type_valid_cpt.
     + unfold concept_defined. intros Hnm. tryfalse.
@@ -715,21 +769,43 @@ End TestTypes1.
 Module TestTypes1_b. 
   Import Examples_ConceptTypes.
   
-  Example test_type_1 : (type_valid_b stempty TNat) = true.
+  Example test_type_1 : (type_valid_b cstempty TNat) = true.
   Proof. reflexivity. Qed.
 
   Definition tyNatBoolNat := TestTypes1.tyNatBoolNat.
   
   Example test_type_2_1 :
-    type_valid_b stempty (TConceptPrm CNnmonoid tyNatBoolNat) = false.
+    type_valid_b cstempty (TConceptPrm CNnmonoid tyNatBoolNat) = false.
   Proof. reflexivity. Qed.
 
   Example test_type_2_2 :
-    type_valid_b (update stempty CNnmonoid CTnmonoid) (TConceptPrm CNnmonoid tyNatBoolNat)
+    type_valid_b (update cstempty CNnmonoid CTnmonoid) (TConceptPrm CNnmonoid tyNatBoolNat)
     = true.
   Proof. reflexivity. Qed.
 End TestTypes1_b.
 (* / Tests ------------------------------- *)
+
+(** We have a symbol table for concepts, concept types, but
+    we have not defined yet a relation on concept definitions and
+    concept types. *)
+
+Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Prop :=
+  (** concept def must be well-defined *)
+  concept_welldefined cst C
+  /\  match C  with cpt_def cname cbody =>
+      match CT with CT_def  cnmtys =>   
+  (** all concept members are reflected in a concept type *)      
+        List.Forall (fun nmdecl => match nmdecl with nm_decl f T =>
+                         find_ty f cnmtys = Some T end) cbody
+  (** amount of concept members is the same as in the concept type *)
+        /\ List.length cbody = IdMap.cardinal cnmtys
+      end end.
+
+(** And we now need an algorithmical way to find type of a concept. *)
+
+Definition concept_type_check (cst : cptcontext) (C : conceptdef) : option cty :=
+  None.
+(* TODO *)
 
 (** At this point we cannot do more on contexts. To check models,
     we have to be able to typecheck terms (function definitions). 
@@ -875,23 +951,16 @@ Inductive ctxvarty : Type :=
 .
 
 Definition context : Type := partial_map ctxvarty.
+Definition ctxempty : context := @empty ctxvarty.
 
 Reserved Notation "CTable '*' MTable ';' Gamma '|-' t '\in' T" (at level 40).
 
 Definition concept_fun_member (CTable : cptcontext) (C : id) (f : id) (TF : ty) : Prop :=
   match CTable C with
   | None => False
-  | Some (CTdef fundefs) => find_ty f fundefs = Some TF
+  | Some (CT_def fundefs) => find_ty f fundefs = Some TF
   end.
 
-(* 
-Inductive mty : Type :=
-  MTdef : id -> id_tm_map -> mty 
-
-mdlcontext = partial_map mty
-     : Type
-
-*)
 Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop :=
   | T_Var   : forall CTable MTable Gamma x T,
       Gamma x = Some (tmtype T) ->
@@ -994,10 +1063,6 @@ End Examples_ModelTypes.
     - model member types coincide with concept member types.
 *)
 
-(** Now let's define a property "type is valid".
-    This property must be checked againts concrete symbol table.
- *)
-
 Definition model_defined (st : mdlcontext) (nm : id) : Prop := 
   st nm <> None.
 
@@ -1007,36 +1072,63 @@ Definition model_defined_b (st : mdlcontext) (nm : id) : bool :=
   | Some _ => true
   end.
 
-(*
-Inductive type_valid (st : cptcontext) : ty -> Prop :=
-  | type_valid_nat   : type_valid st TNat
-  | type_valid_bool  : type_valid st TBool
-  | type_valid_arrow : forall T1 T2,
-      type_valid st T1 ->
-      type_valid st T2 ->
-      type_valid st (TArrow T1 T2)
-  | type_valid_cpt   : forall C T,
-      concept_defined st C ->
-      type_valid st T ->
-      type_valid st (TConceptPrm C T)
-.
+(** [model_member_valid] is a proposition stating that the given
+    model member [nd] (name definition, [f := t]) is valid against
+    a concept with members [fntys] (name declarations, [f : T]).
+*)
 
-Hint Constructors type_valid. 
-
-(** Now we are ready to define a property "concept is well defined" *)
-
-Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
-  match C with
-    cpt_def cname cbody =>
-    let (fnames, ftypes) := split (map namedecl_to_pair cbody) in
-    (** all names are distinct *)
-    List.NoDup fnames
-    (** and all types are valid *)
-    /\ List.Forall (fun ftype => type_valid st ftype) ftypes            
+Definition model_member_valid (cst : cptcontext) (mst : mdlcontext)
+                              (fnmtys : id_ty_map) (nd : namedef) :=
+  match nd with nm_def nm t =>
+    exists (T : ty),
+    (** there is [nm : T] in a concept *)
+    find_ty nm fnmtys = Some T
+    (** and [T] is a type of [t], that is [cst * mst ; empty |- t : T] *)
+    /\ has_type cst mst ctxempty t T
   end.
 
-Hint Unfold concept_welldefined.
-*)
+(** Now we are ready to formally define what it means for a model
+    to be well-defined. *)
+
+Definition model_welldefined (cst : cptcontext) (mst : mdlcontext) (M : modeldef) : Prop :=
+  match M with
+    mdl_def mname C mbody =>
+    let (fnames, fterms) := split (map namedef_to_pair mbody) in
+    (** concept is defined in symbol table *)
+    concept_defined cst C
+    (** fntys is a map from C ids to their types *)
+    /\ (exists fnmtys : id_ty_map, cst C = Some (CT_def fnmtys)
+    (** model members are the same as concept members *)
+       /\ let fnmtys_list := mids_elements ty fnmtys in
+          let Cfnames := List.map fst fnmtys_list in
+          IdSet.Equal (set_from_list fnames) (set_from_list Cfnames)
+    (** types of model member terms conincide with 
+        concept member types *)
+       /\ List.Forall (model_member_valid cst mst fnmtys) mbody
+    (** amount of concept members is the same as model members
+        (together with previous condition it means that 
+        all concept members are defined correctly in a model) *)     
+       /\ IdMap.cardinal fnmtys = List.length mbody)
+  end.
+
+Hint Unfold model_welldefined.
+
+(* ----------------------------------------------------------------- *)
+(** **** Checking Programs *)
+
+(** Now we can write down what it means for the whole program 
+    to be well-defined. *)
+
+(* Inductive program : Type :=  tprog : conceptsec -> modelsec -> tm -> program *)
+
+Definition program_correct (prg : program) : Prop :=
+  match prg with tprog cptsec mdlsec t =>
+    (** All concepts are well_defined *)
+    
+                 
+    True
+  end.
+
 
 
 (* ################################################################# *)
