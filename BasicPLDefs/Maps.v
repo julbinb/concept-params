@@ -2,7 +2,7 @@
 (* Mainly borrowed from Sofware Foundations, v.4 
    $Date: 2015-12-11 17:17:29 -0500 (Fri, 11 Dec 2015) $
 
-   Last Update: Sat, 29 Oct 2016
+   Last Update: Mon, 31 Oct 2016
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -234,6 +234,34 @@ Definition ids_add := IdSet.add.
 
 Definition ids_singleton := IdSet.singleton.
 
+(* ================================================================= *)
+(** ** Map of Identifiers *)
+
+Require Import Coq.FSets.FMaps.
+Require Import Coq.FSets.FMapFullAVL.
+
+(** Map from [id] to arbitrary elements *)
+Module IdMap := FMapFullAVL.Make Id_as_OT.
+
+(** Type of the map [id -> ?X] *)
+
+Definition id_map := IdMap.t.
+
+(** Empty map of ids *)
+
+Definition mids_empty := IdMap.empty.
+
+(** Check membership *)
+
+Definition mids_mem := IdMap.mem.
+
+(** Add id-key and elem into map *)
+
+Definition mids_add := IdMap.add.
+
+(** Get list of [key * element] from a map *)
+
+Definition mids_elements := IdMap.elements.
 
 
 (* ################################################################# *)

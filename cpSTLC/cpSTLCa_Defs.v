@@ -5,7 +5,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Sat, 30 Oct 2016
+   Last Update: Mon, 31 Oct 2016
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
