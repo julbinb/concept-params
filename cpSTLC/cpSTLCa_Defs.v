@@ -371,35 +371,65 @@ End Examples.
 (* ################################################################# *)
 (** ** Typing *)
 
-(** To typecheck terms with concept parameters, we need an additional 
-    context with information about concepts and models.
-
-    So we need a kind of a _symbol table_ with information about
-    concepts and models.
+(** To typecheck terms with concept parameters, we need 
+    information about concepts and models.
+    So we need a kind of a _symbol table_. It is defined later.
+    We start with defining types of concepts and models.
  *)
 
 (** [tycontext] is a typing context: a map from ids to types. *)
 
 Definition tycontext := partial_map ty.
+Hint Unfold tycontext. 
 
-(** Concept type [cty] contains information about members' types. 
-    For simplicity let's express it as a map from ids to types again.
-*)
+(** Concept type [cty] contains information about members' types.
 
-Inductive cty : Type := CTFuns : tycontext -> cty.
+    To check welldefinedness of a concept, it is enough to use
+    [tycontext] (functional map from ids to types) to store 
+    information about names and types of concept members.
+
+    But we also need to check welldefinedness of models. To do so,
+    we have to check that a model defines all concept members.
+    Thus, there must be a way to extract information about all 
+    concept members from [cty].
+ 
+    Therefore, we will use AVL Map from ids to types to express
+    information about concept members.
+ *)
+
+(** AVL map from [id] to [ty]. *)
+Definition id_ty_map := id_map ty.
+Hint Unfold id_ty_map.
+
+Inductive cty : Type := CTdef : id_ty_map -> cty.
+
+Definition find_ty := mids_find ty.
+Hint Unfold find_ty.
 
 (** Models are always defined for some concepts. Therefore, 
-    a list of members and their types is the same as in the 
-    corresponding concept. The only thing we need to know
-    about a model is its concept.
+    a list of members and their types must be the same as in
+    the corresponding concept. 
+    The only thing we need to know about a model to typecheck
+    its application is its concept.
+    But to implement terms reduction, we have to provide 
+    information about members' implementation.
 
-    Thus, model type [mty] will only contain concept name. *)
+    Thus, model type [mty] will contain both concept name
+    and a map from ids to terms. *)
 
-Inductive mty : Type := MTCpt : id -> mty.
+(** AVL map from [id] to [tm]. *)
+Definition id_tm_map := id_map tm.
+Hint Unfold id_tm_map.
 
-(** For further checks we need a _symbol table_ to store information
-    about concepts and models. We can either store both in one table,
-    or have separate tables for concepts and models.
+Inductive mty : Type := MTdef : id -> id_tm_map -> mty.
+
+Definition find_tm := mids_find tm.
+Hint Unfold find_tm.
+
+(** For further checks we need a _symbol table_ to store 
+    information about concepts and models. We can either 
+    store both in one table, or have separate tables 
+    for concepts and models.
 
     For simplicity, we choose the second option. *)
 
@@ -420,19 +450,19 @@ Definition mdlcontext : Type := partial_map mty.
 Module Examples_ConceptTypes.
   Export Examples.
   
-  Definition CTnrevmap := CTFuns (from_list [
+  Definition CTnrevmap := CTdef (map_from_list [
     (FNmap, TArrow TNat TNat);                          
     (FNpam, TArrow TNat TNat)
   ]).
   
-  Definition CTnmonoid := CTFuns (from_list [
+  Definition CTnmonoid := CTdef (map_from_list [
     (FNident, TNat);                          
     (FNop,    TArrow TNat TNat)
   ]).
 
-  Definition CTempty : cty := CTFuns (from_list []).
+  Definition CTempty : cty := CTdef (map_from_list []).
 
-  Definition CTbad1 := CTFuns (from_list [
+  Definition CTbad1 := CTdef (map_from_list [
     (FNmap, TArrow TNat TNat);                          
     (FNmap, TArrow TNat TNat)
   ]).
@@ -851,9 +881,17 @@ Reserved Notation "CTable '*' MTable ';' Gamma '|-' t '\in' T" (at level 40).
 Definition concept_fun_member (CTable : cptcontext) (C : id) (f : id) (TF : ty) : Prop :=
   match CTable C with
   | None => False
-  | Some (CTFuns fundefs) => fundefs f = Some TF
+  | Some (CTdef fundefs) => find_ty f fundefs = Some TF
   end.
 
+(* 
+Inductive mty : Type :=
+  MTdef : id -> id_tm_map -> mty 
+
+mdlcontext = partial_map mty
+     : Type
+
+*)
 Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop :=
   | T_Var   : forall CTable MTable Gamma x T,
       Gamma x = Some (tmtype T) ->
@@ -865,8 +903,8 @@ Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop :=
   | T_Abs   : forall CTable MTable Gamma x t12 T11 T12,
       CTable * MTable ; (update Gamma x (tmtype T11)) |- t12 \in T12 ->                 
       CTable * MTable ; Gamma |- tabs x T11 t12 \in T12
-  | T_MApp  : forall CTable MTable Gamma t1 M C T1,
-      MTable M = Some (MTCpt C) ->
+  | T_MApp  : forall CTable MTable Gamma t1 M C Mbody T1,
+      MTable M = Some (MTdef C Mbody) ->
       CTable * MTable ; Gamma |- t1 \in TConceptPrm C T1 ->
       CTable * MTable ; Gamma |- tmapp t1 M \in T1
   | T_CAbs  : forall CTable MTable Gamma c t1 C T1,
@@ -923,15 +961,29 @@ Hint Constructors has_type.
 Module Examples_ModelTypes.
   Export Examples.
   
-  Definition MTnrm_plus1 := MTCpt CNnrevmap.
+  Definition MTnrm_plus1 := MTdef CNnrevmap (map_from_list [
+    (FNmap, tabs vx TNat (tsucc (tvar vx)));
+    (FNpam, tabs vx TNat (tpred (tvar vx)))
+  ]).
  
-  Definition MTnrm_ident := MTCpt CNnrevmap.
+  Definition MTnrm_ident := MTdef CNnrevmap (map_from_list [
+    (FNmap, tabs vx TNat (tvar vx));
+    (FNpam, tabs vx TNat (tvar vx))
+  ]).
 
-  Definition MTnmnd_plus := MTCpt CNnmonoid.
+  Definition MTnmnd_plus := MTdef CNnmonoid (map_from_list [
+    (FNident, tnat 0);
+    (FNop, tabs vx TNat (tabs vy TNat (tplus (tvar vx) (tvar vy))))
+  ]).
 
-  Definition MTnmnd_mult := MTCpt CNnmonoid.
+  Definition MTnmnd_mult := MTdef CNnmonoid (map_from_list [
+    (FNident, tnat 1);
+    (FNop, tabs vx TNat (tabs vy TNat (tmult (tvar vx) (tvar vy))))
+  ]).
 
-  Definition MTbad1 := MTCpt CNnfoo.
+  Definition MTbad1 := MTdef CNnfoo (map_from_list [
+    (FNident, tnat 1)
+  ]).
 
 End Examples_ModelTypes.
 (* / Examples ---------------------------- *)

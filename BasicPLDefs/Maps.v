@@ -197,7 +197,7 @@ Module Id_as_OT' := (Coq.Structures.OrdersAlt.Update_OT Id_as_OT).
 (* Module for a set of ids *)
 Module IdSet := MSetAVL.Make Id_as_OT'.
 
-Module IdSetExamples.
+(*Module IdSetExamples.
   
   Module M1 := IdSet.
 
@@ -211,28 +211,32 @@ Module IdSetExamples.
   Eval vm_compute in (M1.elements ens4').
   Eval vm_compute in M1.compare ens3' ens4'.
 
-End IdSetExamples.
-
+End IdSetExamples.*)
 
 (** Type of the set *)
 
 Definition id_set := IdSet.t.
+Hint Unfold id_set. 
 
 (** Empty set of ids *)
 
 Definition ids_empty := IdSet.empty.
+Hint Unfold ids_empty. 
 
 (** Check membership *)
 
 Definition ids_mem := IdSet.mem.
+Hint Unfold ids_mem. 
 
 (** Add elem into set *)
 
 Definition ids_add := IdSet.add.
+Hint Unfold ids_add. 
 
 (** Make singleton set  *)
 
 Definition ids_singleton := IdSet.singleton.
+Hint Unfold ids_singleton. 
 
 (* ================================================================= *)
 (** ** Map of Identifiers *)
@@ -246,22 +250,40 @@ Module IdMap := FMapFullAVL.Make Id_as_OT.
 (** Type of the map [id -> ?X] *)
 
 Definition id_map := IdMap.t.
+Hint Unfold id_map. 
 
-(** Empty map of ids *)
+(** Empty map of ids. *)
 
 Definition mids_empty := IdMap.empty.
+Hint Unfold mids_empty.
 
-(** Check membership *)
+(** Checks membership. *)
 
 Definition mids_mem := IdMap.mem.
+Hint Unfold mids_mem.
 
-(** Add id-key and elem into map *)
+(** Add id-key and elem into map. *)
 
 Definition mids_add := IdMap.add.
+Hint Unfold mids_add.
 
-(** Get list of [key * element] from a map *)
+(** Finds a value with the given key in a map. *)
+
+Definition mids_find := IdMap.find.
+Hint Unfold mids_find.
+
+(** Get list of [key * element] from a map. *)
 
 Definition mids_elements := IdMap.elements.
+Hint Unfold mids_elements.
+
+(** [map_from_list] builds a map from ids to [A] from 
+    a list of pairs [id * A]. *)
+
+Definition map_from_list {A : Type} (xs : list (id * A)) : id_map A
+  := fold_left
+       (fun m xv => match xv with (x, v) => mids_add A x v m end)
+       xs (mids_empty A).
 
 
 (* ################################################################# *)
