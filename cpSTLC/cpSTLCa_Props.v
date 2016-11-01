@@ -23,6 +23,9 @@ Add LoadPath "../..".
 Require Import ConceptParams.BasicPLDefs.Maps.
 Require Import ConceptParams.BasicPLDefs.Relations.
 
+Require Import ConceptParams.AuxTactics.LibTactics.
+Require Import ConceptParams.AuxTactics.BasicTactics.
+
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 
 Require Import MSets.MSetFacts.
@@ -35,7 +38,13 @@ Require Import Coq.omega.Omega.
 
 
 (* ################################################################# *)
-(** ** Typing *)
+(** ** Program Well-definedness and Typing *)
+
+(* ================================================================= *)
+(** *** Checking Concepts *)
+
+(* ----------------------------------------------------------------- *)
+(** **** Concept Well-definedness *)
 
 (** First of all we want to prove that [ids_are_unique] is correct, 
     i.e. if it returns true, than there is no duplicates in the list.    
@@ -219,7 +228,7 @@ Qed.
 
 (** Here is the main [ids_are_unique] correctness theorem: *)
 
-Theorem ids_are_unique__NoDup__correct : forall (l : list id),
+Theorem ids_are_unique__correct : forall (l : list id),
     ids_are_unique l = true -> NoDup l.
 Proof.
   intros l. induction l as [ | h l' IHl'].
@@ -233,8 +242,75 @@ Proof.
     assumption.
 Qed.
 
+Lemma type_valid_b__correct : forall (cst : cptcontext) (T : ty),
+    type_valid_b cst T = true ->
+    type_valid cst T.
+Proof.
+  intros cst T. generalize dependent cst.
+  induction T; intros cst H;
+    (* simple cases like TNat *)
+    try constructor;
+    (* using assumption *)
+    try (simpl in H; rewrite -> andb_true_iff in H;
+         inversion H as [H1 H2]; clear H).
+  - (* T1 -> T2 ... T1 *) apply IHT1 in H1. assumption.
+  - (* T1 -> T2 ... T2 *) auto.
+  - (* concept_defined *)
+    unfold concept_defined.
+    intros Hcontra. unfold concept_defined_b in H1.
+    destruct (cst i); tryfalse.
+  - (* type_valid *)
+    apply IHT in H2. assumption.
+Qed.
 
+Print types_valid_b.
 
+Lemma types_valid_b__correct : forall (cst : cptcontext) (ts : list ty),
+    types_valid_b cst ts = true ->
+    List.Forall (fun ftype => type_valid cst ftype) ts.
+Proof.
+  intros cst ts. unfold types_valid_b.
+  induction ts as [| t ts'];
+    intros H.
+  - (* ts = nil *)
+    apply Forall_nil.
+  - (* ts = t :: ts' *)
+    simpl in H. rewrite -> andb_true_iff in H.
+    inversion H as [Ht Hts']; clear H.
+    apply IHts' in Hts'. apply type_valid_b__correct in Ht.
+    apply Forall_cons; auto.
+Qed.
+
+Theorem concept_well_defined_b__correct : forall (cst : cptcontext) (C : conceptdef),
+    concept_welldefined_b cst C = true ->
+    concept_welldefined   cst C.
+Proof.
+  intros cst C. intros H.
+  unfold concept_welldefined_b in H. destruct C.
+  unfold concept_welldefined.
+  destruct (split (map namedecl_to_pair n)).
+  rewrite -> andb_true_iff in H. inversion H as [Hid Hty].
+  apply ids_are_unique__correct in Hid.
+  apply types_valid_b__correct in Hty.
+  split; auto.
+Qed.
+
+(* ----------------------------------------------------------------- *)
+(** **** Concept Typing *)
+
+Theorem concept_type_check__correct : forall (cst : cptcontext) 
+                                             (C : conceptdef) (CT : cty),  
+    concept_type_check cst C = Some CT ->
+    concept_has_type cst C CT.
+Proof.
+  intros cst C CT. intros H.
+  unfold concept_type_check in H.
+  destruct (concept_welldefined_b cst C). 
+  destruct C.
+  
+  (* unfold concept_has_type in H. inversion H as [Hwd HCT]. clear H. *)
+
+Abort.
 
 (*
 

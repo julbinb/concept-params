@@ -804,8 +804,14 @@ Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Pro
 (** And we now need an algorithmical way to find type of a concept. *)
 
 Definition concept_type_check (cst : cptcontext) (C : conceptdef) : option cty :=
-  None.
-(* TODO *)
+  if concept_welldefined_b cst C 
+  then match C with cpt_def cname cbody =>
+      let cbody' := map namedecl_to_pair cbody in
+      Some (CT_def (map_from_list cbody'))
+  end
+  else 
+    None.
+
 
 (** At this point we cannot do more on contexts. To check models,
     we have to be able to typecheck terms (function definitions). 
