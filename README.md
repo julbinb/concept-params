@@ -5,7 +5,7 @@
 Coq formalization of "concept parameters" for "generic" programming in STLC.
 
 The first step is to add simple **concepts** and **models** into STLC:
-look at `cpSTLCa*` files in [`cpSTLC`](cpSTLC).\ 
+look at `cpSTLCa*` files in [`cpSTLC`](cpSTLC).  
 Concepts contain function signatures only, models define those functions.
 A program in cpSTLCa consists of concepts' and models' definitions and
 a term in STLC extended with concept parametrization and model application.
