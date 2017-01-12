@@ -60,6 +60,12 @@ Module IdSetProps := MSetProperties.WProperties IdSet.
 Import IdSet.
 Import IdSetFacts.
 
+Lemma mem_empty__false : forall (x : id),
+    ids_mem x ids_empty = false.
+Proof.
+  reflexivity.
+Qed.
+
 Lemma add_eq__mem_true : forall (x : id) (s : id_set),
     ids_mem x (ids_add x s) = true.
 Proof.
@@ -181,6 +187,16 @@ Proof.
     repeat (rewrite add_neq__mem_ignore; simpl).
     reflexivity. auto. assumption.
 Qed.    
+
+Lemma ids_are_unique_recur_cons__add : forall (l : list id) 
+                                              (x : id) (s : id_set),
+    ids_mem x s = false ->
+    ids_are_unique_recur (x :: l) s 
+    = ids_are_unique_recur l (ids_add x s).
+Proof.
+  intros. simpl.
+  rewrite H. reflexivity.
+Qed.
     
 Lemma ids_are_unique_cons : forall (x : id) (l : list id),
     ids_are_unique (x :: l) = true ->
@@ -242,6 +258,9 @@ Proof.
     assumption.
 Qed.
 
+(** And the final steps to prove that [concept_well_defined_b]
+    is correct. *)
+
 Lemma type_valid_b__correct : forall (cst : cptcontext) (T : ty),
     type_valid_b cst T = true ->
     type_valid cst T.
@@ -295,6 +314,128 @@ Proof.
   split; auto.
 Qed.
 
+
+(** But we also have to prove the opposite side, soundness.
+    
+    Let's start with soundness of [ids_are_unique]:
+    if there is no dups in the list, then ids_are_unique is true. *)
+
+Lemma ids_are_unique_recur_cons : forall (l : list id) (x : id) (s : id_set),
+    ids_are_unique_recur (x :: l) s = true ->
+    ids_are_unique_recur l s = true.
+Proof.
+  intros [| h l'].
+  - (* l = nil *)
+    intros x s Hrec. reflexivity.
+  - (* l = h :: l' *)
+    intros x s Hxh.
+    inversion Hxh. rewrite -> H0.
+    destruct (ids_mem x s) eqn: Hmemxs. 
+      inversion H0.
+    destruct (ids_mem h (ids_add x s)) eqn: Hmemhxs.
+      inversion H0.
+    remember Hmemhxs as Hmemhxs'; clear HeqHmemhxs'.
+    apply ids_are_unique_recur_cons__add with (l := l') (s := (ids_add x s)) in Hmemhxs.
+    rewrite -> H0 in Hmemhxs.
+    apply ids_are_unique_recur_add_true__true in Hmemhxs.
+    assumption.
+Qed.
+
+Lemma ids_are_unique_recur_cons__mem_false : forall (l : list id) 
+                                                    (x : id) (s : id_set),
+    ids_are_unique_recur (x :: l) s = true ->
+    ids_mem x s = false.
+Proof.
+  intros [| h l'].
+  - (* l = nil *)
+    intros x s H.
+    inversion H as [H'].
+    destruct (ids_mem x s) eqn: Hxs; auto. 
+  - (* l = h :: l' *)
+    intros x s H. 
+    simpl in H. destruct (ids_mem x s) eqn: Hxs; auto.
+Qed.
+
+Lemma not_in_list_cons : forall (l : list id) (h : id) (x : id),
+    ~ List.In x (h :: l) ->
+    (~ List.In x l) /\ (x <> h).
+Proof.
+  intros l h x Hh.
+  split.
+  - (* ~ List.In x l *)
+    intros H. assert (contra: List.In x (h :: l)). 
+    { simpl. right. assumption. }
+    apply Hh in contra. auto.                                       
+  - (* x <> h *)
+    intros H. assert (contra: List.In x (h :: l)). 
+    { simpl. left. symmetry. assumption. }    
+    tauto.
+Qed.
+
+Lemma ids_are_unique_recur__not_mem_add : forall (l : list id) 
+                                                 (x : id) (s : id_set),
+    ids_are_unique_recur l s = true ->
+    ~ List.In x l ->
+    ids_mem x s = false ->
+    ids_are_unique_recur l (ids_add x s) = true.
+Proof.
+  intros l. induction l as [| h l' IHl'].
+  - (* l = nil *)
+    intros. reflexivity.
+  - (* l = h :: l' *)
+    intros x s Hrecs Hin Hmem.    
+    simpl.
+
+    assert (Hin' := Hin). apply not_in_list_cons in Hin'.
+    inversion Hin' as [Hinl' Hneqxh].
+
+    assert (Hhs: ids_mem h s = false) 
+      by (apply ids_are_unique_recur_cons__mem_false with l'; apply Hrecs).
+    assert (Hmemf: ids_mem h (ids_add x s) = false) by
+        (rewrite (add_neq__mem_ignore x h s Hneqxh); rewrite Hhs; auto).
+
+    rewrite Hmemf.
+    rewrite ids_are_unique_recur__set_permute.
+    rewrite (ids_are_unique_recur_cons__add l' h s Hhs) in Hrecs.
+
+    apply IHl'. 
+    + assumption.
+    + assumption.
+    + rewrite add_neq__mem_ignore; auto.
+Qed.
+
+Lemma ids_are_unique_recur_true__cons_true : forall (l : list id) 
+                                                    (s : id_set) (x : id),
+    ids_are_unique_recur l s = true ->
+    ~ List.In x l ->
+    ids_mem x s = false ->
+    ids_are_unique_recur (x :: l) s = true.
+Proof. 
+  intros l s x H Hin Hmem.
+  simpl.
+  rewrite Hmem.
+  apply ids_are_unique_recur__not_mem_add; auto.
+Qed.
+
+(** Here is the main [ids_are_unique] soundness theorem: *)
+
+Theorem ids_are_unique__sound : forall (l : list id),
+    NoDup l -> ids_are_unique l = true.
+Proof.
+  intros l. induction l as [ | h l' IHl'].
+  - (* l = nil *)
+    intros H. reflexivity.
+  - (* l = h :: l' *)
+    intros H. inversion H; subst.
+    apply IHl' in H3.
+    unfold ids_are_unique in *. 
+    apply ids_are_unique_recur_true__cons_true.
+    + assumption.
+    + assumption.
+    + reflexivity.
+Qed.
+
+
 (* ----------------------------------------------------------------- *)
 (** **** Concept Typing *)
 
@@ -317,28 +458,7 @@ Abort.
 Lemma id_set_In__add_permute : forall (x y z : id) (s : id_set),
     IdSet.In x (ids_add y (ids_add z s)) ->
     IdSet.In x (ids_add z (ids_add y s)).
-Proof.
-  intros x y z s. intros Hin.
-  apply add_spec in Hin. inversion Hin as [Heq | Hin'].
-  - (* x = y *)
-    subst. apply add_spec. right.
-    apply add_1. reflexivity.
-  - (* x <> y *)
-    apply add_spec in Hin'. inversion Hin' as [Heq | Hin''].
-    + (* x = z *)
-      subst. apply add_1. reflexivity.
-    + (* x <> z *)
-      apply add_spec. right. apply add_spec. right.
-      assumption.
-Qed.
-
-Lemma mem_true__add_permute : forall (x y z : id) (s : id_set),
-    ids_mem x (ids_add y (ids_add z s)) = true
-    -> ids_mem x (ids_add z (ids_add y s)) = true.
-Proof.
-  intros x y z s.
-  repeat (rewrite -> IdSet.mem_spec).
-  apply id_set_In__add_permute.
+n__add_permute.
 Qed.
 
 Lemma mem_add_permute : forall (x y z : id) (s : id_set),
