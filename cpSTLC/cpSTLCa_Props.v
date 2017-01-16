@@ -28,8 +28,6 @@ Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 
-Require Import MSets.MSetFacts.
-
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
@@ -144,7 +142,7 @@ Proof.
         assert (H: Equal (ids_add h s) (ids_add h s'))
                by (apply add_elem_into_eq__eq; assumption).
         apply IHl'. assumption.
-Qed.       
+Qed.      
 
 Lemma ids_are_unique_recur__set_permute : forall (l : list id) (s : id_set) (x y : id),
   ids_are_unique_recur l (ids_add x (ids_add y s))
@@ -282,7 +280,7 @@ Proof.
     apply IHT in H2. assumption.
 Qed.
 
-Print types_valid_b.
+(* Print types_valid_b. *)
 
 Lemma types_valid_b__correct : forall (cst : cptcontext) (ts : list ty),
     types_valid_b cst ts = true ->
@@ -435,23 +433,201 @@ Proof.
     + reflexivity.
 Qed.
 
+(** And the final steps to prove that [concept_well_defined_b]
+    is sound. *)
+
+Lemma type_valid_b__sound : forall (cst : cptcontext) (T : ty),
+    type_valid cst T ->
+    type_valid_b cst T = true.
+Proof.
+  intros cst T. generalize dependent cst.
+  induction T; intros cst H;
+    (* simple cases like TNat *)
+    try reflexivity.
+  - (* T1 -> T2 *) 
+    inversion H; subst. apply IHT1 in H2. apply IHT2 in H3.
+    simpl. apply andb_true_iff. auto.
+  - (* concept param *)
+    inversion H; subst. apply IHT in H3.
+    simpl. apply andb_true_iff. split.
+    (* concept_defined *)
+    unfold concept_defined_b.
+    unfold concept_defined in H2.
+    destruct (cst i); tauto.
+    (* type_valid *) assumption.
+Qed.
+
+Lemma types_valid_b__sound : forall (cst : cptcontext) (ts : list ty),
+    List.Forall (fun ftype => type_valid cst ftype) ts ->
+    types_valid_b cst ts = true.
+Proof.
+  intros cst ts. unfold types_valid_b.
+  induction ts as [| t ts' IHts'];
+    intros H.
+  - (* ts = nil *)
+    reflexivity.
+  - (* ts = t :: ts' *)
+    inversion H; subst.
+    simpl. rewrite -> andb_true_iff. split.
+    + apply type_valid_b__sound. assumption.
+    + apply IHts'. assumption.
+Qed.
+
+Theorem concept_well_defined_b__sound : forall (cst : cptcontext) (C : conceptdef),
+    concept_welldefined   cst C ->
+    concept_welldefined_b cst C = true.
+Proof.
+  intros cst C. intros H.
+  unfold concept_welldefined_b.
+  unfold concept_welldefined in H.
+  destruct C. destruct (split (map namedecl_to_pair n)).
+  inversion H as [Hdup Htys].
+  rewrite -> andb_true_iff. split.
+  apply ids_are_unique__sound in Hdup. assumption.
+  apply types_valid_b__sound. assumption.
+Qed.
+
 
 (* ----------------------------------------------------------------- *)
 (** **** Concept Typing *)
 
+(** As usually, we need some auxiliary lemmas to connect AVL maps. *)
+
+Lemma map_from_list_not_in__preserves_mapping : 
+  forall (pnds : list (prod id ty)) (nm : id) (tp : ty)(m : id_map ty),  
+(* JB | cannot figure out how to write [list (id * type)], scoping problems *)
+    IdMap.MapsTo nm tp m ->
+    ~ List.In nm (map fst pnds) ->
+    IdMap.MapsTo nm tp (map_from_list' pnds m).
+Proof.
+  intros pnds. induction pnds as [| pnd pnds' IHpnds'].
+  - (* pnds = nil *)
+    intros nm tp m Hmaps Hnin. simpl. assumption. 
+  - (* pnds = pnd :: pnds' *)
+    intros nm tp m Hmaps Hin.
+    unfold map_from_list' in *. simpl. simpl in IHpnds'.
+    apply IHpnds'.
+    + (* IdMap.MapsTo nm tp (m += pnd) *)    
+      destruct pnd as [x v]. destruct (beq_idP nm x). subst.
+      assert (contra: List.In x (map fst ((x, v) :: pnds'))) 
+        by (simpl; left; reflexivity).
+      apply Hin in contra. contradiction.
+      apply IdMap.add_2. intros H. symmetry in H. apply n in H. 
+      contradiction.
+      assumption.
+    + (* ~ List.In nm (map fst pnds') *)
+      intros H. 
+      assert (contra: List.In nm (map fst (pnd :: pnds')))
+        by (simpl; right; assumption).
+      apply Hin in contra. contradiction.
+Qed.
+
+Lemma map_from_list_add_unique__preserves_mapping : 
+  forall (pnds : list (prod id ty)) (nm : id) (tp : ty) (m : id_map ty),  
+(* JB | cannot figure out how to write [list (id * type)], scoping problems *)
+    ~ List.In nm (map fst pnds) ->
+    IdMap.MapsTo nm tp (map_from_list' ((nm, tp) :: pnds) m).
+Proof. 
+  intros pnds nm tp m. intros Hin.
+  simpl. apply map_from_list_not_in__preserves_mapping.
+  apply IdMap.add_1. reflexivity.
+  assumption.
+Qed.
+
+(*
+IdMap.add_1:
+  forall (elt : Type) (m : IdMap.t elt) (x y : IdMap.key) (e : elt),
+  x = y -> IdMap.MapsTo y e (IdMap.add x e m)
+
+IdMap.find_1:
+  forall (elt : Type) (m : IdMap.t elt) (x : IdMap.key) (e : elt),
+  IdMap.MapsTo x e m -> IdMap.find (elt:=elt) x m = Some e
+*)
+
+Lemma map_from_list__find_cons__true : forall (nm : id) (tp : ty) 
+                                              (nds : list namedecl),
+    let pnds := map namedecl_to_pair nds in
+    ~ List.In nm (List.map fst pnds) ->
+    find_ty nm (map_from_list ((nm, tp) :: pnds)) = Some tp.
+Proof.
+  intros nm tp nds. intros pnds. intros Hin.
+  unfold find_ty, mids_find. 
+  apply IdMap.find_1.
+  apply map_from_list_add_unique__preserves_mapping. auto.
+Qed.
+
+
+Lemma split_fst__map_fst : forall {A B : Type} (l : list (prod A B)) 
+                                  (xs : list A) (ys : list B),
+    split l = (xs, ys) -> 
+    map fst l = xs.
+Proof.
+  intros A B l. induction l as [| h l' IHl'].
+  - (* l = nil *)
+    intros xs ys H. simpl in H. inversion H; subst.
+    reflexivity.
+  - (* l = h :: l' *)
+    intros xs ys H. destruct h eqn:eqh.
+    simpl in H. destruct (split l'). simpl. 
+    destruct xs as [| x xs']. destruct ys as [| y ys'].
+    + inversion H.
+    + inversion H.
+    + inversion H; subst. apply f_equal.
+      apply IHl' with (ys := l0). reflexivity.
+Qed.
+
+(*
 Theorem concept_type_check__correct : forall (cst : cptcontext) 
                                              (C : conceptdef) (CT : cty),  
     concept_type_check cst C = Some CT ->
     concept_has_type cst C CT.
 Proof.
-  intros cst C CT. intros H.
-  unfold concept_type_check in H.
-  destruct (concept_welldefined_b cst C). 
-  destruct C.
-  
+  intros cst C CT.
+  unfold concept_type_check. 
+  destruct (concept_welldefined_b cst C) eqn: HCdef. 
+  (* C welldefined *)
+  destruct C as [Cnm nds]. intros H.
+  inversion H; subst. clear H.
+  unfold concept_has_type. split.
+  - apply concept_well_defined_b__correct in HCdef. assumption.
+  - split. 
+    + (* forall find_ty*)
+      induction nds as [| d nds' IHnds']. 
+      apply Forall_nil.
+      apply Forall_cons. destruct d. 
+      simpl. apply map_from_list__find_cons__true.
+      (* ~ List.In i (map fst (map namedecl_to_pair nds')) *)
+      simpl in HCdef. 
+      remember (map namedecl_to_pair nds') as pnds'.
+      destruct (split pnds') as [nms tps] eqn:eqpnds'.
+      rewrite andb_true_iff in HCdef. inversion HCdef as [Huniq Hvalid].
+      apply ids_are_unique__correct in Huniq. inversion Huniq; subst.
+      replace (map fst (map namedecl_to_pair nds')) with nms.
+      assumption. apply split_fst__map_fst in eqpnds'. auto.
+(*
+Forall_impl:
+  forall (A : Type) (P Q : A -> Prop),
+  (forall a : A, P a -> Q a) -> forall l : list A, Forall P l -> Forall Q l
+*)
+      apply Forall_impl with (P := fun nmdecl : namedecl =>
+              match nmdecl with
+              | nm_decl f T =>
+                  find_ty f (map_from_list (map namedecl_to_pair nds')) = Some T
+              end).
+      intros [f T] H.
+      simpl. unfold map_from_list.
+
+      unfold concept_welldefined_b in HCdef.
+      
+
+unfold map_from_list. unfold find_ty, mids_find. 
+    simpl. 
+
   (* unfold concept_has_type in H. inversion H as [Hwd HCT]. clear H. *)
 
 Abort.
+*)
+
 
 (*
 

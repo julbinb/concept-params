@@ -39,11 +39,12 @@ Require Import Coq.omega.Omega.
     with simple _concept parameters_.
 
 
-    Types are STLC types with a type [C # T], 
+    Types are STLC types with the type [C # T], 
     where [C] is a concept name, [T] is a type.
 
-    Terms are STLC terms with a term [\c#C. t], 
-    where [c] is a concept parameter.
+    Terms are STLC terms with the terms:
+    - [\c#C. t] (concept parametrization) where [c] is a concept parameter;
+    - [t # M] (model application) where [M] is a model.
 
 <<
       CSec ::=           Concept declarations
@@ -173,6 +174,27 @@ Proof.
     apply IHT1 in HT. subst.
     reflexivity.
 Qed.  
+
+Lemma beq_tyP : forall T1 T2, reflect (T1 = T2) (beq_ty T1 T2).
+Proof.
+  intros T1 T2. 
+  apply iff_reflect. split.
+  - (* T1 = T2 -> beq_ty T1 T2 = true *)
+    intros H. 
+    destruct T1; destruct T2;
+      (* in simple cases reflexivity *)
+      try reflexivity;
+      (* some cases give contra in assumption *)
+      try (inversion H).
+    + (* T2_1 -> T2_2 = T2_1 -> T2_2 *)
+      simpl. apply andb_true_iff. split.
+      apply beq_ty_refl. apply beq_ty_refl.
+    + (* C # T2 = C # T2 *)
+      rename i0 into C. simpl. apply andb_true_iff. split.
+      symmetry. apply beq_id_refl. apply beq_ty_refl. 
+  - (* beq_ty T1 T2 = true -> T1 = T2 *)
+    apply beq_ty__eq.
+Qed.
 
 (* ----------------------------------------------------------------- *)
 (** **** Terms *)

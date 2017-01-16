@@ -250,6 +250,8 @@ Definition set_from_list (xs : list id) : id_set
 
 Require Import Coq.FSets.FMaps.
 Require Import Coq.FSets.FMapFullAVL.
+Require Export Coq.FSets.FMapFacts.
+
 
 (** Map from [id] to arbitrary elements *)
 Module IdMap := FMapFullAVL.Make Id_as_OT.
@@ -292,6 +294,10 @@ Definition map_from_list {A : Type} (xs : list (id * A)) : id_map A
        (fun m xv => match xv with (x, v) => mids_add A x v m end)
        xs (mids_empty A).
 
+Definition map_from_list' {A : Type} (xs : list (id * A)) (m : id_map A) : id_map A
+  := fold_left
+       (fun m xv => match xv with (x, v) => mids_add A x v m end)
+       xs m.
 
 (* ################################################################# *)
 (** * Total Maps *)
