@@ -246,6 +246,9 @@ Inductive conceptdef : Type :=
   | cpt_def : id -> namedecl_list -> conceptdef   (* concept Id NameDefs endc *)
 .
 
+Definition conceptdef__get_name (C : conceptdef) : id :=
+  match C with cpt_def nm nmdecls => nm end.
+
 (** Concept declarations Section *)
 
 Definition conceptsec : Type := list conceptdef.
@@ -834,7 +837,6 @@ Definition concept_type_check (cst : cptcontext) (C : conceptdef) : option cty :
   else 
     None.
 
-
 (** At this point we cannot do more on contexts. To check models,
     we have to be able to typecheck terms (function definitions). 
     But terms may conist of model applications.
@@ -981,7 +983,7 @@ Inductive ctxvarty : Type :=
 Definition context : Type := partial_map ctxvarty.
 Definition ctxempty : context := @empty ctxvarty.
 
-Reserved Notation "CTable '*' MTable ';' Gamma '|-' t '\in' T" (at level 40).
+Reserved Notation "CTable '$' MTable ';' Gamma '|-' t '\in' T" (at level 50).
 
 Definition concept_fun_member (CTable : cptcontext) (C : id) (f : id) (TF : ty) : Prop :=
   match CTable C with
@@ -992,62 +994,62 @@ Definition concept_fun_member (CTable : cptcontext) (C : id) (f : id) (TF : ty) 
 Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop :=
   | T_Var   : forall CTable MTable Gamma x T,
       Gamma x = Some (tmtype T) ->
-      CTable * MTable ; Gamma |- tvar x \in T
+      CTable $ MTable ; Gamma |- tvar x \in T
   | T_App   : forall CTable MTable Gamma t1 t2 T11 T12,
-      CTable * MTable ; Gamma |- t1 \in T11 ->
-      CTable * MTable ; Gamma |- t2 \in T12 ->                 
-      CTable * MTable ; Gamma |- tapp t1 t2 \in T12
+      CTable $ MTable ; Gamma |- t1 \in T11 ->
+      CTable $ MTable ; Gamma |- t2 \in T12 ->                 
+      CTable $ MTable ; Gamma |- tapp t1 t2 \in T12
   | T_Abs   : forall CTable MTable Gamma x t12 T11 T12,
-      CTable * MTable ; (update Gamma x (tmtype T11)) |- t12 \in T12 ->                 
-      CTable * MTable ; Gamma |- tabs x T11 t12 \in T12
+      CTable $ MTable ; (update Gamma x (tmtype T11)) |- t12 \in T12 ->                 
+      CTable $ MTable ; Gamma |- tabs x T11 t12 \in T12
   | T_MApp  : forall CTable MTable Gamma t1 M C Mbody T1,
       MTable M = Some (MTdef C Mbody) ->
-      CTable * MTable ; Gamma |- t1 \in TConceptPrm C T1 ->
-      CTable * MTable ; Gamma |- tmapp t1 M \in T1
+      CTable $ MTable ; Gamma |- t1 \in TConceptPrm C T1 ->
+      CTable $ MTable ; Gamma |- tmapp t1 M \in T1
   | T_CAbs  : forall CTable MTable Gamma c t1 C T1,
-      CTable * MTable ; (update Gamma c (cpttype C)) |- t1 \in T1 ->
-      CTable * MTable ; Gamma |- tcabs c C t1 \in TConceptPrm C T1
+      CTable $ MTable ; (update Gamma c (cpttype C)) |- t1 \in T1 ->
+      CTable $ MTable ; Gamma |- tcabs c C t1 \in TConceptPrm C T1
   | T_CInvk : forall CTable MTable Gamma c f C TF,
       Gamma c = Some (cpttype C) ->
       concept_fun_member CTable C f TF ->
-      CTable * MTable ; Gamma |- tcinvk c f \in TF
+      CTable $ MTable ; Gamma |- tcinvk c f \in TF
   | T_True  : forall CTable MTable Gamma,
-      CTable * MTable ; Gamma |- ttrue \in TBool
+      CTable $ MTable ; Gamma |- ttrue \in TBool
   | T_False : forall CTable MTable Gamma,
-      CTable * MTable ; Gamma |- tfalse \in TBool
+      CTable $ MTable ; Gamma |- tfalse \in TBool
   | T_If    : forall CTable MTable Gamma t1 t2 t3 T,
-      CTable * MTable ; Gamma |- t1 \in TBool ->
-      CTable * MTable ; Gamma |- t2 \in T ->
-      CTable * MTable ; Gamma |- t3 \in T ->
-      CTable * MTable ; Gamma |- tif t1 t2 t3 \in T
+      CTable $ MTable ; Gamma |- t1 \in TBool ->
+      CTable $ MTable ; Gamma |- t2 \in T ->
+      CTable $ MTable ; Gamma |- t3 \in T ->
+      CTable $ MTable ; Gamma |- tif t1 t2 t3 \in T
   | T_Nat   : forall CTable MTable Gamma n,
-      CTable * MTable ; Gamma |- tnat n \in TNat
+      CTable $ MTable ; Gamma |- tnat n \in TNat
   | T_Succ   : forall CTable MTable Gamma t1,
-      CTable * MTable ; Gamma |- t1 \in TNat ->
-      CTable * MTable ; Gamma |- tsucc t1 \in TNat                                                    | T_Pred   : forall CTable MTable Gamma t1,
-      CTable * MTable ; Gamma |- t1 \in TNat ->
-      CTable * MTable ; Gamma |- tpred t1 \in TNat                                                    | T_Plus   : forall CTable MTable Gamma t1 t2,
-      CTable * MTable ; Gamma |- t1 \in TNat ->
-      CTable * MTable ; Gamma |- t2 \in TNat ->
-      CTable * MTable ; Gamma |- tplus t1 t2 \in TNat                                                 | T_Minus  : forall CTable MTable Gamma t1 t2,
-      CTable * MTable ; Gamma |- t1 \in TNat ->
-      CTable * MTable ; Gamma |- t2 \in TNat ->
-      CTable * MTable ; Gamma |- tminus t1 t2 \in TNat                                                | T_Mult   : forall CTable MTable Gamma t1 t2,
-      CTable * MTable ; Gamma |- t1 \in TNat ->
-      CTable * MTable ; Gamma |- t2 \in TNat ->
-      CTable * MTable ; Gamma |- tmult t1 t2 \in TNat                                                 | T_EqNat  : forall CTable MTable Gamma t1 t2,
-      CTable * MTable ; Gamma |- t1 \in TNat ->
-      CTable * MTable ; Gamma |- t2 \in TNat ->
-      CTable * MTable ; Gamma |- teqnat t1 t2 \in TBool                                               | T_LeNat  : forall CTable MTable Gamma t1 t2,
-      CTable * MTable ; Gamma |- t1 \in TNat ->
-      CTable * MTable ; Gamma |- t2 \in TNat ->
-      CTable * MTable ; Gamma |- tlenat t1 t2 \in TBool                                               | T_Let    : forall CTable MTable Gamma x t1 t2 T1 T2,
-      CTable * MTable ; Gamma |- t1 \in T1 ->
-      CTable * MTable ; (update Gamma x (tmtype T1)) |- t2 \in T2 ->
-      CTable * MTable ; Gamma |- tlet x t1 t2 \in T2                          
+      CTable $ MTable ; Gamma |- t1 \in TNat ->
+      CTable $ MTable ; Gamma |- tsucc t1 \in TNat                                                    | T_Pred   : forall CTable MTable Gamma t1,
+      CTable $ MTable ; Gamma |- t1 \in TNat ->
+      CTable $ MTable ; Gamma |- tpred t1 \in TNat                                                    | T_Plus   : forall CTable MTable Gamma t1 t2,
+      CTable $ MTable ; Gamma |- t1 \in TNat ->
+      CTable $ MTable ; Gamma |- t2 \in TNat ->
+      CTable $ MTable ; Gamma |- tplus t1 t2 \in TNat                                                 | T_Minus  : forall CTable MTable Gamma t1 t2,
+      CTable $ MTable ; Gamma |- t1 \in TNat ->
+      CTable $ MTable ; Gamma |- t2 \in TNat ->
+      CTable $ MTable ; Gamma |- tminus t1 t2 \in TNat                                                | T_Mult   : forall CTable MTable Gamma t1 t2,
+      CTable $ MTable ; Gamma |- t1 \in TNat ->
+      CTable $ MTable ; Gamma |- t2 \in TNat ->
+      CTable $ MTable ; Gamma |- tmult t1 t2 \in TNat                                                 | T_EqNat  : forall CTable MTable Gamma t1 t2,
+      CTable $ MTable ; Gamma |- t1 \in TNat ->
+      CTable $ MTable ; Gamma |- t2 \in TNat ->
+      CTable $ MTable ; Gamma |- teqnat t1 t2 \in TBool                                               | T_LeNat  : forall CTable MTable Gamma t1 t2,
+      CTable $ MTable ; Gamma |- t1 \in TNat ->
+      CTable $ MTable ; Gamma |- t2 \in TNat ->
+      CTable $ MTable ; Gamma |- tlenat t1 t2 \in TBool                                               | T_Let    : forall CTable MTable Gamma x t1 t2 T1 T2,
+      CTable $ MTable ; Gamma |- t1 \in T1 ->
+      CTable $ MTable ; (update Gamma x (tmtype T1)) |- t2 \in T2 ->
+      CTable $ MTable ; Gamma |- tlet x t1 t2 \in T2                          
 
-where "CTable '*' MTable ';' Gamma '|-' t '\in' T"
-      := (has_type CTable MTable Gamma t T).
+where "CTable '$' MTable ';' Gamma '|-' t '\in' T"
+      := (has_type CTable MTable Gamma t T) : stlca_scope.
 
 Hint Constructors has_type.
 
@@ -1149,11 +1151,31 @@ Hint Unfold model_welldefined.
 
 (* Inductive program : Type :=  tprog : conceptsec -> modelsec -> tm -> program *)
 
+Definition conceptsec_welldefined (cptsec : conceptsec) : Prop :=
+  exists (cst : cptcontext),
+  Forall (fun (C : conceptdef) => concept_welldefined cst C) cptsec
+  /\ Forall (fun (C : conceptdef) => cst (conceptdef__get_name C) <> None) cptsec.
+
+Definition conceptsec_welldefined_b (cptsec : conceptsec) : cptcontext * bool :=
+(* use fold_left to pass the right context along the check *)
+  fold_left 
+    (fun (acc : cptcontext * bool) (C : conceptdef) =>
+       let (cst, correct) := acc
+       in if correct then 
+            let ctp := concept_type_check cst C
+            in match ctp with
+                 | Some ctp' => (update cst (conceptdef__get_name C) ctp', true)
+                 | None      => (cstempty, false)
+               end 
+          else (cstempty, false)
+    )
+    cptsec (cstempty, true).
+
+
 Definition program_correct (prg : program) : Prop :=
   match prg with tprog cptsec mdlsec t =>
     (** All concepts are well_defined *)
-    
-                 
+         
     True
   end.
 

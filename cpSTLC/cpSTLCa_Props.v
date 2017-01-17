@@ -577,6 +577,56 @@ Proof.
 Qed.
 
 (*
+Lemma map_from_list__any_map : 
+  forall (pnds : list (prod id ty)) (nm : id) (tp : ty) (m : id_map ty),  
+    List.In nm (map fst pnds) ->
+    (*List.NoDup (map fst pnds) ->*)
+    IdMap.MapsTo nm tp (map_from_list' pnds m) ->
+    forall (m' : id_map ty), IdMap.MapsTo nm tp (map_from_list' pnds m').
+Proof.
+  intros pnds. induction pnds as [|pnd pnds' IHpnds'].
+  - (* pnds = nil *)
+    intros nm tp m Hin (*Hdup*) Hmaps m'. 
+    simpl in Hin. contradiction.
+  - (* pnds = pnd :: pnds' *)
+    intros nm tp m Hin (*Hdup*) Hmaps m'.
+    simpl. simpl in Hmaps. 
+    simpl in Hin. inversion Hin as [Hnmeq | Hin']. 
+    + subst. simpl in Hdup. subst.
+    apply IHpnds' with (m := (let (x, v) := pnd in mids_add ty x v m)).
+    simpl in Hin. inversion Hin as [Hnmeq | Hin']. 
+    + simpl in Hdup. subst.
+
+Abort.
+*)
+
+(*
+Lemma map_from_list__cons_ignore : forall (nds : list namedecl)
+                                          (nm : id) (tp : ty) (x : id) (v : ty)
+                                          (m : id_map ty),
+    let pnds := map namedecl_to_pair nds in
+    find_ty nm (map_from_list' pnds m) = Some tp ->
+    List.In nm (List.map fst pnds) ->
+    find_ty nm (map_from_list' pnds (mids_add ty x v m)) = Some tp.
+Proof.
+  intros nds nm tp x v m. intros pnds.
+  generalize dependent m.
+  generalize dependent v. generalize dependent x.
+  generalize dependent tp. generalize dependent nm.
+  induction pnds as [|pnd pnds' IHpnds'].
+  - (* pnds = nil *)
+    intros nm tp x v m H Hin. 
+    inversion Hin.
+  - (* pnds = pnd :: pnds' *)
+    intros nm tp x v m H Hin. induction Hin.
+    destruct pnd as [nm1 tp1]. simpl.
+    apply IHpnds'. simpl in H.
+
+    simpl in H. apply IHpnds' with (x := x) (v := v) in H.
+    simpl.
+Abort.
+*)
+
 Theorem concept_type_check__correct : forall (cst : cptcontext) 
                                              (C : conceptdef) (CT : cty),  
     concept_type_check cst C = Some CT ->
@@ -615,18 +665,15 @@ Forall_impl:
                   find_ty f (map_from_list (map namedecl_to_pair nds')) = Some T
               end).
       intros [f T] H.
-      simpl. unfold map_from_list.
-
+      simpl. unfold map_from_list. simpl.
+(*
       unfold concept_welldefined_b in HCdef.
-      
-
 unfold map_from_list. unfold find_ty, mids_find. 
     simpl. 
-
   (* unfold concept_has_type in H. inversion H as [Hwd HCT]. clear H. *)
-
-Abort.
 *)
+Abort.
+
 
 
 (*
