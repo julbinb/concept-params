@@ -11,6 +11,7 @@
 ./AuxTactics/BasicTactics.v
 
 ./cpSTLC/cpSTLCa_Defs.v
+./cpSTLC/cpSTLCa_Examples.v
 ./cpSTLC/cpSTLCa_Props.v
 
 # VS := *.v
