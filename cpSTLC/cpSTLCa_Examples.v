@@ -187,19 +187,19 @@ End Examples.
 Module Examples_ConceptTypes.
   Export Examples.
   
-  Definition CTnrevmap := CT_def (map_from_list [
+  Definition CTnrevmap := CTdef (map_from_list [
     (FNmap, TArrow TNat TNat);                          
     (FNpam, TArrow TNat TNat)
   ]).
   
-  Definition CTnmonoid := CT_def (map_from_list [
+  Definition CTnmonoid := CTdef (map_from_list [
     (FNident, TNat);                          
     (FNop,    TArrow TNat TNat)
   ]).
 
-  Definition CTempty : cty := CT_def (map_from_list []).
+  Definition CTempty : cty := CTdef (map_from_list []).
 
-  Definition CTbad1 := CT_def (map_from_list [
+  Definition CTbad1 := CTdef (map_from_list [
     (FNmap, TArrow TNat TNat);                          
     (FNmap, TArrow TNat TNat)
   ]).

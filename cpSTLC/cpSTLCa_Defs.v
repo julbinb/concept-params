@@ -5,7 +5,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 31 Oct 2016
+   Last Update: Wed, 18 Jan 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -262,7 +262,7 @@ Hint Unfold conceptsec.
 (** Name definition *)
 
 Inductive namedef : Type :=
-  | nm_def : id -> tm -> namedef   (* f = T *)
+  | nm_def : id -> tm -> namedef   (* f = t *)
 .
 
 (** Auxiliary function to transform name defintion into pair *)
@@ -387,6 +387,9 @@ Definition cstempty : cptcontext := @empty cty.
 Definition mdlcontext : Type := partial_map mty.
 Definition mstempty : mdlcontext := @empty mty.
 
+(* ================================================================= *)
+(** *** Checking Types Validity *)
+
 (* ----------------------------------------------------------------- *)
 (** **** Checking Concept Definitions *)
 
@@ -426,6 +429,21 @@ Inductive type_valid (st : cptcontext) : ty -> Prop :=
 
 Hint Constructors type_valid. 
 
+(** We can also write a function [types_are_valid] to check that 
+    all types in a list are valid.
+*)
+
+Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
+  match t with
+  | TNat  => true
+  | TBool => true
+  | TArrow t1 t2     => andb (type_valid_b st t1)  (type_valid_b st t2)
+  | TConceptPrm c t1 => andb (concept_defined_b st c) (type_valid_b st t1)
+  end.
+
+Definition types_valid_b (st : cptcontext) (ts : list ty) : bool :=
+  List.forallb (fun t => type_valid_b st t) ts.
+
 (** Now we are ready to define a property "concept is well defined" *)
 
 Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
@@ -463,24 +481,6 @@ Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
 
 Definition ids_are_unique (names : list id) : bool :=
   ids_are_unique_recur names ids_empty.
-
-(* ================================================================= *)
-(** *** Checking Types Validity *)
-
-(** We can also write a function [types_are_valid] to check that 
-    all types in a list are valid.
-*)
-
-Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
-  match t with
-  | TNat  => true
-  | TBool => true
-  | TArrow t1 t2     => andb (type_valid_b st t1)  (type_valid_b st t2)
-  | TConceptPrm c t1 => andb (concept_defined_b st c) (type_valid_b st t1)
-  end.
-
-Definition types_valid_b (st : cptcontext) (ts : list ty) : bool :=
-  List.forallb (fun t => type_valid_b st t) ts.
 
 (** And define a function to check that "concept is well defined" *)
 
@@ -669,13 +669,14 @@ Inductive ctxvarty : Type :=
 Definition context : Type := partial_map ctxvarty.
 Definition ctxempty : context := @empty ctxvarty.
 
-Reserved Notation "CTable '$' MTable ';' Gamma '|-' t '\in' T" (at level 50).
-
+(** Aux function for typing relation *)
 Definition concept_fun_member (CTable : cptcontext) (C : id) (f : id) (TF : ty) : Prop :=
   match CTable C with
   | None => False
   | Some (CTdef fundefs) => find_ty f fundefs = Some TF
   end.
+
+Reserved Notation "CTable '$' MTable ';' Gamma '|-' t '\in' T" (at level 50).
 
 (** Here is our typing relation for cpSTLCa terms. *)
 
@@ -749,7 +750,7 @@ where "CTable '$' MTable ';' Gamma '|-' t '\in' T"
 
 Hint Constructors has_type.
 
-(** And corresponding typechecker. *)
+(** And the corresponding typechecker. *)
 
 (** Looks for _term_ type of [x] in context [Gamma]. *)
 Definition context_get_type (Gamma : context) (x : id) : option ty :=
@@ -766,6 +767,7 @@ Definition context_get_concept (CTable : cptcontext)
                  => match ctx_ty with | cpttype C => CTable C | _ => None end)
                 None.
 
+(** The type checking function. *)
 Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
          (Gamma : context) (t : tm) : option ty :=
   let tycheck := type_check CTable MTable in
@@ -873,7 +875,7 @@ Definition model_defined_b (st : mdlcontext) (nm : id) : bool :=
 *)
 
 Definition model_member_valid (cst : cptcontext) (mst : mdlcontext)
-                              (fnmtys : id_ty_map) (nd : namedef) :=
+                              (fnmtys : id_ty_map) (nd : namedef) : Prop :=
   match nd with nm_def nm t =>
     exists (T : ty),
     (** there is [nm : T] in a concept *)
@@ -882,16 +884,31 @@ Definition model_member_valid (cst : cptcontext) (mst : mdlcontext)
     /\ has_type cst mst ctxempty t T
   end.
 
+(** And [model_member_valid_b] is a corresponding function to
+    check member's validity. *)
+
+Definition model_member_valid_b (cst : cptcontext) (mst : mdlcontext)
+                                (fnmtys : id_ty_map) (nd : namedef) : bool :=
+  match nd with nm_def nm t =>
+    (** there is [nm : T] in a concept *)
+    match find_ty nm fnmtys with
+    (** and [T] is a type of [t], that is [cst * mst ; empty |- t : T] *)
+    | Some T => match type_check cst mst ctxempty t with
+                  | Some T' => if beq_ty T T' then true else false
+                  | _ => false  end
+    | _ => false
+  end end.
+
 (** Now we are ready to formally define what it means for a model
     to be well-defined. *)
 
 Definition model_welldefined (cst : cptcontext) (mst : mdlcontext) (M : modeldef) : Prop :=
-  match M with
+  match M with 
     mdl_def mname C mbody =>
     let (fnames, fterms) := split (map namedef_to_pair mbody) in
     (** concept is defined in symbol table *)
     concept_defined cst C
-    (** fntys is a map from C ids to their types *)
+    (** fnmtys is a map from C ids to their types *)
     /\ (exists fnmtys : id_ty_map, cst C = Some (CTdef fnmtys)
     (** model members are the same as concept members *)
        /\ let fnmtys_list := mids_elements ty fnmtys in
@@ -908,6 +925,61 @@ Definition model_welldefined (cst : cptcontext) (mst : mdlcontext) (M : modeldef
 
 Hint Unfold model_welldefined.
 
+(** And we define a function to check that "model is well defined" *)
+
+Definition model_welldefined_b (cst : cptcontext) (mst : mdlcontext) 
+           (M : modeldef) : bool :=
+  match M with 
+    mdl_def mname C mbody =>
+    match (cst C) with
+    (** concept is defined in symbol table *)
+    | Some (CTdef fnmtys) =>
+      let (fnames, fterms) := split (map namedef_to_pair mbody) in
+    (** model members are the same as concept members *)
+      let fnmtys_list := mids_elements ty fnmtys in
+      let Cfnames := List.map fst fnmtys_list in
+      andb
+        (IdSet.equal (set_from_list fnames) (set_from_list Cfnames))
+      (andb
+    (** types of model member terms conincide with 
+        concept member types *)
+        (forallb (model_member_valid_b cst mst fnmtys) mbody)
+    (** amount of concept members is the same as model members
+        (together with previous condition it means that 
+        all concept members are defined correctly in a model) *)  
+        (beq_nat (IdMap.cardinal fnmtys) (List.length mbody)))
+    | _ => false     
+  end end.
+
+(** And we also need typing relation for models. *)
+
+Definition model_has_type (cst : cptcontext) (mst : mdlcontext) 
+           (M : modeldef) (MT : mty) : Prop :=
+  (** model def must be well-defined *)
+  model_welldefined cst mst M
+  /\  match M  with mdl_def mname C mbody =>
+      match MT with MTdef C' mnmtms =>   
+  (** a concept defined by model coincides with the concept in type *)
+        C = C'
+  (** all model members are reflected in the model type *)      
+        /\ List.Forall (fun nmdef => match nmdef with nm_def f t =>
+                        find_tm f mnmtms = Some t end) mbody
+  (** amount of model members is the same as in the model type *)
+        /\ List.length mbody = IdMap.cardinal mnmtms
+      end end.
+
+(** And we now need an algorithmical way to find type of a model. *)
+
+Definition model_type_check (cst : cptcontext) (mst : mdlcontext) 
+           (M : modeldef) : option mty :=
+  if model_welldefined_b cst mst M
+  then match M with mdl_def mname C mbody =>
+       let mbody' := map namedef_to_pair mbody in
+       Some (MTdef C (map_from_list mbody'))
+  end
+  else 
+    None.
+
 (* ----------------------------------------------------------------- *)
 (** **** Checking Programs *)
 
@@ -922,8 +994,7 @@ Hint Unfold model_welldefined.
     - all concepts in the section are well-defined against it;
     - symbol table contains appropriate concept types. *)
 
-Definition conceptsec_welldefined (cptsec : conceptsec) : Prop :=
-  exists (cst : cptcontext),
+Definition conceptsec_welldefined (cptsec : conceptsec) (cst : cptcontext) : Prop :=
   (*Forall (fun (C : conceptdef) => concept_welldefined cst C) cptsec
   /\ Forall (fun (C : conceptdef) => cst (conceptdef__get_name C) <> None) cptsec*)
   Forall (fun (C : conceptdef) => 
@@ -953,15 +1024,29 @@ Definition conceptsec_welldefined_b (cptsec : conceptsec) : cptcontext * bool :=
 (** First, model section (list of model definitions) is also 
     to be well-formed. 
     That is there is a symbol table of models such that
-    - all concepts in the section are well-defined against it;
+    - all models in the section are well-defined against it;
     - symbol table contains appropriate concept types. *)
 
+Definition modelsec_welldefined 
+           (mdlsec : modelsec) (cst : cptcontext) (mst : mdlcontext) : Prop :=
+(* TODO *)
+  Forall (fun (M : modeldef) =>
+            (model_welldefined cst mst M)
+            /\ (exists (MT : mty),
+                   True)
+         ) mdlsec.
 
-Definition program_correct (prg : program) : Prop :=
+(** And, finally, we can define program correctness *)
+
+Definition program_correct (prg : program) 
+           (cst : cptcontext) (mst : mdlcontext) (T : ty) : Prop :=
   match prg with tprog cptsec mdlsec t =>
     (** All concepts are well_defined *)
-         
-    True
+    conceptsec_welldefined cptsec cst 
+    (** All models are well defined *)
+    /\ modelsec_welldefined mdlsec cst mst
+    (** Term is well typed *)
+    /\ has_type cst mst ctxempty t T
   end.
 
 

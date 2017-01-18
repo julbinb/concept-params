@@ -105,7 +105,7 @@ Inductive conceptdef : Type :=
 Definition conceptsec : Type := list conceptdef.
 
 Inductive namedef : Type :=
-  | nm_def : id -> tm -> namedef   (* f = T *)
+  | nm_def : id -> tm -> namedef   (* f = t *)
 .
 Definition namedef_list : Type := list namedef.
 
