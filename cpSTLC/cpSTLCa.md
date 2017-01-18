@@ -61,7 +61,7 @@ STLC with `Nat` and `Bool` with simple **concept parameters**:
 
 #### Syntax
 
-```
+```coq
 Inductive ty : Type :=
   | TBool : ty 
   | TNat  : ty
@@ -93,7 +93,7 @@ Inductive tm : Type :=
 
 #### Typing
 
-```
+```coq
 Inductive namedecl : Type :=
   | nm_decl : id -> ty -> namedecl   (* f : T *)
 .
@@ -157,7 +157,7 @@ Definition mstempty : mdlcontext := @empty mty.
 
 #### Checking Concepts, Models, and Programs
 
-```
+```coq
 (** Concepts *)
 
 Definition concept_defined (st : cptcontext) (nm : id) : Prop.
