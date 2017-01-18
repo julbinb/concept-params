@@ -578,7 +578,7 @@ Qed.
 
 (*
 Lemma map_from_list__any_map : 
-  forall (pnds : list (prod id ty)) (nm : id) (tp : ty) (m : id_map ty),  
+  forall (pnds : list (prod id ty)) (nm : id) (tp : ty) (m : id_ty_map),  
     List.In nm (map fst pnds) ->
     (*List.NoDup (map fst pnds) ->*)
     IdMap.MapsTo nm tp (map_from_list' pnds m) ->
@@ -603,7 +603,7 @@ Abort.
 (*
 Lemma map_from_list__cons_ignore : forall (nds : list namedecl)
                                           (nm : id) (tp : ty) (x : id) (v : ty)
-                                          (m : id_map ty),
+                                          (m : id_ty_map),
     let pnds := map namedecl_to_pair nds in
     find_ty nm (map_from_list' pnds m) = Some tp ->
     List.In nm (List.map fst pnds) ->

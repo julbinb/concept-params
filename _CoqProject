@@ -7,6 +7,8 @@
 ./BasicPLDefs/Maps.v
 ./BasicPLDefs/Relations.v
 
+./BasicPLDefs/Utils.v
+
 ./AuxTactics/LibTactics.v
 ./AuxTactics/BasicTactics.v
 

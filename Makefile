@@ -98,6 +98,7 @@ endif
 
 VFILES:=BasicPLDefs/Maps.v\
   BasicPLDefs/Relations.v\
+  BasicPLDefs/Utils.v\
   AuxTactics/LibTactics.v\
   AuxTactics/BasicTactics.v\
   cpSTLC/cpSTLCa_Defs.v\
