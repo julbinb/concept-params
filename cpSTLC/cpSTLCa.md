@@ -127,7 +127,7 @@ Definition tycontext := partial_map ty.
 Definition id_ty_map := id_map ty.
 
 (** Concept type *)
-Inductive cty : Type := CT_def : id_ty_map -> cty.
+Inductive cty : Type := CTdef : id_ty_map -> cty.
 
 Definition find_ty := mids_find ty.
 
