@@ -23,6 +23,7 @@ Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
+Require Import ConceptParams.cpSTLC.cpSTLCa_Interpreter.
 
 Require Import Coq.Lists.List.
 Import ListNotations.

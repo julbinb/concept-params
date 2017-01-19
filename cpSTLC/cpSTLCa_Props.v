@@ -6,12 +6,13 @@
    Properties of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Fri, 29 Oct 2016
+   Last Update: Thu, 19 Jan 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
 (* ***************************************************************** *)
 (** * cpSTLCa Properties
+
       (Simply Typed Lambda Calculus with simple Concept Parameters  
        :: version a) *)
 (* ***************************************************************** *)
@@ -23,10 +24,13 @@ Add LoadPath "../..".
 Require Import ConceptParams.BasicPLDefs.Maps.
 Require Import ConceptParams.BasicPLDefs.Relations.
 
+Require Import ConceptParams.BasicPLDefs.Utils.
+
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
+Require Import ConceptParams.cpSTLC.cpSTLCa_Interpreter.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -34,6 +38,65 @@ Require Import Coq.Bool.Bool.
 
 Require Import Coq.omega.Omega.
 
+
+(* ################################################################# *)
+(** ** Syntax *)
+
+(* ----------------------------------------------------------------- *)
+(** **** Types *)
+
+Lemma beq_ty_refl : forall T1, beq_ty T1 T1 = true.
+Proof.
+  intros T1. induction T1; (simpl; auto).
+  - (* T1 -> T2 *)
+    rewrite -> IHT1_1. rewrite -> IHT1_2. reflexivity.
+  - (* C # T *)
+    rewrite -> IHT1. rewrite <- beq_id_refl. reflexivity.
+Qed.
+
+Lemma beq_ty__eq : forall T1 T2,
+    beq_ty T1 T2 = true -> T1 = T2.
+Proof.
+  intros T1. induction T1;
+  (intros T2; induction T2; intros H);
+    (* in some cases it's just reflexivity *)
+    try reflexivity;
+    (* in other cases we have impossible equalities as assumptions 
+       (such as TNat = TBool) *)
+    try solve_by_invert.
+  - (* T1_1 -> T1_2 = T2_1 -> T2_2 *)
+    simpl in H. apply andb_true_iff in H.
+    inversion H as [H1 H2].
+    apply IHT1_1 in H1. apply IHT1_2 in H2.
+    subst. reflexivity.
+  - (* C1 # T1 = C2 # T2 *)
+    simpl in H. apply andb_true_iff in H.
+    inversion H as [HC HT].
+    rewrite -> beq_id_true_iff in HC. subst.
+    apply IHT1 in HT. subst.
+    reflexivity.
+Qed.  
+
+Lemma beq_tyP : forall T1 T2, reflect (T1 = T2) (beq_ty T1 T2).
+Proof.
+  intros T1 T2. 
+  apply iff_reflect. split.
+  - (* T1 = T2 -> beq_ty T1 T2 = true *)
+    intros H. 
+    destruct T1; destruct T2;
+      (* in simple cases reflexivity *)
+      try reflexivity;
+      (* some cases give contra in assumption *)
+      try (inversion H).
+    + (* T2_1 -> T2_2 = T2_1 -> T2_2 *)
+      simpl. apply andb_true_iff. split.
+      apply beq_ty_refl. apply beq_ty_refl.
+    + (* C # T2 = C # T2 *)
+      rename i0 into C. simpl. apply andb_true_iff. split.
+      symmetry. apply beq_id_refl. apply beq_ty_refl. 
+  - (* beq_ty T1 T2 = true -> T1 = T2 *)
+    apply beq_ty__eq.
+Qed.
 
 (* ################################################################# *)
 (** ** Program Well-definedness and Typing *)
