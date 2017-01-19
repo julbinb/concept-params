@@ -282,6 +282,9 @@ Inductive modeldef : Type :=
   | mdl_def : id -> id -> namedef_list -> modeldef   (* model Id of Id NameDefs endm *)
 .
 
+Definition modeldef__get_name (M : modeldef) : id :=
+  match M with mdl_def nm C nmdefs => nm end.
+
 (** Model declarations Section *)
 
 Definition modelsec : Type := list modeldef.
@@ -959,7 +962,7 @@ Definition model_has_type (cst : cptcontext) (mst : mdlcontext)
   model_welldefined cst mst M
   /\  match M  with mdl_def mname C mbody =>
       match MT with MTdef C' mnmtms =>   
-  (** a concept defined by model coincides with the concept in type *)
+  (** a concept defined by model coincides with the concept in the type *)
         C = C'
   (** all model members are reflected in the model type *)      
         /\ List.Forall (fun nmdef => match nmdef with nm_def f t =>
@@ -979,6 +982,10 @@ Definition model_type_check (cst : cptcontext) (mst : mdlcontext)
   end
   else 
     None.
+
+(** _Note!_ No any evaluation is applied to model members (terms). 
+    So model members have to be exactly reflected in the model type,
+    that is have exactly the same syntactic structure.  *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Programs *)
@@ -1000,7 +1007,7 @@ Definition conceptsec_welldefined (cptsec : conceptsec) (cst : cptcontext) : Pro
   Forall (fun (C : conceptdef) => 
             (concept_welldefined cst C)
             /\ (exists (CT : cty),
-                   (* concept symb. table contains info about the type of C *)
+                   (* concept symb. table contains info about type of C *)
                    cst (conceptdef__get_name C) = Some CT 
                    (* and C indeed has this type *)
                    /\ concept_has_type cst C CT)
@@ -1029,19 +1036,38 @@ Definition conceptsec_welldefined_b (cptsec : conceptsec) : cptcontext * bool :=
 
 Definition modelsec_welldefined 
            (mdlsec : modelsec) (cst : cptcontext) (mst : mdlcontext) : Prop :=
-(* TODO *)
   Forall (fun (M : modeldef) =>
+            (* model is welldefined *)
             (model_welldefined cst mst M)
             /\ (exists (MT : mty),
-                   True)
+                   (* model symb. table contains info about type of M *)
+                   mst (modeldef__get_name M) = Some MT
+                   (* and M indeed has this type *)
+                   /\ model_has_type cst mst M MT)
          ) mdlsec.
 
-(** And, finally, we can define program correctness *)
+Definition modelsec_welldefined_b (mdlsec : modelsec) (cst : cptcontext)
+           : mdlcontext * bool :=
+  fold_left 
+    (fun (acc : mdlcontext * bool) (M : modeldef) =>
+       let (mst, correct) := acc
+       in if correct then 
+            let mtp := model_type_check cst mst M
+            in match mtp with
+                 | Some MT => (update mst (modeldef__get_name M) MT, true)
+                 | None    => (mstempty, false)
+               end 
+          else (mstempty, false)
+    )
+    mdlsec (mstempty, true).
 
-Definition program_correct (prg : program) 
-           (cst : cptcontext) (mst : mdlcontext) (T : ty) : Prop :=
+(** And, finally, we can define what it means for the whole _program_
+    to be well-typed (correct). *)
+
+Definition program_has_type (cst : cptcontext) (mst : mdlcontext)
+           (prg : program) (T : ty) : Prop :=
   match prg with tprog cptsec mdlsec t =>
-    (** All concepts are well_defined *)
+    (** All concepts are well defined *)
     conceptsec_welldefined cptsec cst 
     (** All models are well defined *)
     /\ modelsec_welldefined mdlsec cst mst
@@ -1049,6 +1075,20 @@ Definition program_correct (prg : program)
     /\ has_type cst mst ctxempty t T
   end.
 
+Definition program_type_check (cst : cptcontext) (mst : mdlcontext)
+           (prg : program) : option ty :=
+  match prg with tprog cptsec mdlsec t =>
+    let (cst, cpt_good) := conceptsec_welldefined_b cptsec in
+    (** All concepts are well defined *)
+    if cpt_good then
+      let (mst, mdl_good) := modelsec_welldefined_b mdlsec cst in
+      (** All models are well defined *)
+      if mdl_good then
+        (** Term is well typed *)
+        type_check cst mst ctxempty t
+      else None
+    else None
+  end.
 
 
 (* ################################################################# *)
