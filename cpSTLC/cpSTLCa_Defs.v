@@ -746,11 +746,45 @@ Definition program_has_type (cst : cptcontext) (mst : mdlcontext)
 (* ################################################################# *)
 (** ** Operational Semantics *)
 
+(* ================================================================= *)
+(** *** Values *)
+
+(** We start with defining the values of our language. *)
+
+(** There are several "standard" categories of values:
+
+    - boolean constants [true] and [false];
+    - numbers [nat n];
+    - abstractions (functions) [\x:T.t].
+
+    But in cpSTLCa there is one more kind of abstraction:
+    concept parameters. We consider it as a value too.
+*)
+
+Inductive value : tm -> Prop :=
+  | v_abs  : forall x T t,
+      value (tabs x T t)
+  | v_cabs : forall c C t,
+      value (tcabs c C t)
+  | v_true :
+      value ttrue
+  | v_false :
+      value tfalse
+  | v_nat : forall n,
+      value (tnat n).
+
+Hint Constructors value.
 
 (* ================================================================= *)
 (** *** Substitution *)
 
+(** Apparently, to evaluate terms of cpSTLCa we need not only usual
+    terms substitution, but also models subsitution. *)
 
+(* ----------------------------------------------------------------- *)
+(** **** Free Variables *)
+
+(** To define substitution, we will need free variables and free. *)
 
 
 (*
@@ -808,3 +842,87 @@ Fixpoint subst (x:id) (s:tm) (t:tm) : tm :=
 Notation "'[' x ':=' s ']' t" := (subst x s t) (at level 20).
 
  *)
+
+
+(* ================================================================= *)
+(** *** Reduction (Small-step operational semantics) *)
+
+(** 
+
+    tvar x
+    : no rules
+
+    tapp
+
+******************************
+
+What is the form of our relation? 
+
+We will definitely need to take information from symbol tables 
+of concept and models.
+
+CTable * MTable $ t ==> t'
+
+*******************************************
+
+                               value v2
+              ------------------------------------------            (ST_AppAbs)
+              CTbl * MTbl $ (\x:T.t12) v2 ==> [x:=v2]t12
+
+                              t1 ==> t1'
+                           ----------------                           (ST_App1)
+                           t1 t2 ==> t1' t2
+
+                              value v1
+                              t2 ==> t2'
+                           ----------------                           (ST_App2)
+                           v1 t2 ==> v1 t2'
+
+ ... plus the usual rules for booleans:
+
+                    --------------------------------                (ST_IfTrue)
+                    (if true then t1 else t2) ==> t1
+
+                    ---------------------------------              (ST_IfFalse)
+                    (if false then t1 else t2) ==> t2
+
+                              t1 ==> t1'
+         ----------------------------------------------------           (ST_If)
+         (if t1 then t2 else t3) ==> (if t1' then t2 else t3)
+
+**********************************
+
+                              Gamma \has c#C
+                             C \in dom(CTable)
+                        CTable(C) = ... f : TF ...
+                   -----------------------------------                (T_CInvk)
+                   CTable * MTable ; Gamma |- c.f : TF
+
+
+                  ------------------------------------                 (T_True)
+                 CTable * MTable ; Gamma |- true : Bool
+
+                  ------------------------------------                (T_False)
+                 CTable * MTable ; Gamma |- false : Bool
+*)
+
+(*
+  | tvar  : id -> tm               (* x *)
+  | tapp  : tm -> tm -> tm         (* t1 t2 *)
+  | tabs  : id -> ty -> tm -> tm   (* \x:T11.t12 *)
+  | tmapp : tm -> id -> tm         (* t1 # M *)
+  | tcabs  : id -> id -> tm -> tm  (* \c#C.t1 *)
+  | tcinvk : id -> id -> tm        (* c.f *)                                 
+  | ttrue  : tm
+  | tfalse : tm
+  | tif : tm -> tm -> tm -> tm     (* if t1 then t2 else t3 *)
+  | tnat   : nat -> tm             (* n *)
+  | tsucc  : tm -> tm              (* succ t1 *) 
+  | tpred  : tm -> tm              (* pred t1 *)
+  | tplus  : tm -> tm -> tm        (* plus t1 t2 *)
+  | tminus : tm -> tm -> tm        (* minus t1 t2 *)
+  | tmult  : tm -> tm -> tm        (* mult t1 t2 *)
+  | teqnat : tm -> tm -> tm        (* eqnat t1 t2 *)
+  | tlenat : tm -> tm -> tm        (* lenat t1 t2 *)
+  | tlet   : id -> tm -> tm -> tm  (* let x = t1 in t2 *) 
+*)
