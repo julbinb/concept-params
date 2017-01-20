@@ -847,82 +847,204 @@ Notation "'[' x ':=' s ']' t" := (subst x s t) (at level 20).
 (* ================================================================= *)
 (** *** Reduction (Small-step operational semantics) *)
 
-(** 
+(** What is the form of reduction relation in cpSTLCa? 
+
+    We will definitely need to keep track the information from 
+    symbol tables of concept and models.
+    
+    So, instead of usual [t ==> t']
+    we have
+                    [CTable * MTable ; t ==> t']
+
+
+    In the inference rules we use two kinds of substitution:
+
+    [x:=s] t -- substitution, variable substitution 
+                (variable [x] is substituted with term [s] in term [t])
+
+    [#c:=M] t -- concept substitution
+                 (concept parameter [c] is substituted with 
+                  model [M] in term [t])
+
+
+    Here are the rules:
 
     tvar x
-    : no rules
+      no rules
 
-    tapp
-
-******************************
-
-What is the form of our relation? 
-
-We will definitely need to take information from symbol tables 
-of concept and models.
-
-CTable * MTable $ t ==> t'
-
-*******************************************
+    tapp t1 t2
 
                                value v2
-              ------------------------------------------            (ST_AppAbs)
-              CTbl * MTbl $ (\x:T.t12) v2 ==> [x:=v2]t12
+             -------------------------------------------            (ST_AppAbs)
+             CTbl * MTbl ; (\x:T.t12) v2 ==> [x:=v2] t12
 
-                              t1 ==> t1'
-                           ----------------                           (ST_App1)
-                           t1 t2 ==> t1' t2
+                        CTble * MTbl ; t1 ==> t1'
+                     ------------------------------                   (ST_App1)
+                     CTbl * MTbl ; t1 t2 ==> t1' t2
 
                               value v1
-                              t2 ==> t2'
-                           ----------------                           (ST_App2)
-                           v1 t2 ==> v1 t2'
-
- ... plus the usual rules for booleans:
-
-                    --------------------------------                (ST_IfTrue)
-                    (if true then t1 else t2) ==> t1
-
-                    ---------------------------------              (ST_IfFalse)
-                    (if false then t1 else t2) ==> t2
-
-                              t1 ==> t1'
-         ----------------------------------------------------           (ST_If)
-         (if t1 then t2 else t3) ==> (if t1' then t2 else t3)
-
-**********************************
-
-                              Gamma \has c#C
-                             C \in dom(CTable)
-                        CTable(C) = ... f : TF ...
-                   -----------------------------------                (T_CInvk)
-                   CTable * MTable ; Gamma |- c.f : TF
+                        CTbl * MTbl ; t2 ==> t2'
+                     ------------------------------                   (ST_App2)
+                     CTbl * MTbl ; v1 t2 ==> v1 t2'
 
 
-                  ------------------------------------                 (T_True)
-                 CTable * MTable ; Gamma |- true : Bool
+    tabs x T11 t12  (\x:T11.t12)
+      no rules
 
-                  ------------------------------------                (T_False)
-                 CTable * MTable ; Gamma |- false : Bool
+    tmapp t1 M      (t1 # M)
+
+                           M \in dom(MTbl)
+                        MTble(M) implements C
+              ------------------------------------------          (ST_MAppCAbs)
+                CTbl * MTbl ; (\c#C.t) M ==> [#c:=M] t
+
+                       CTble * MTbl ; t1 ==> t1'
+                    --------------------------------                 (ST_MApp1)
+                    CTbl * MTbl ; t1 # M ==> t1' # M
+    
+
+    tcabs c C t1    (\c#C.t1)
+      no rules
+ 
+    tcinvk M f      (M.f)
+
+      member invocation can be evaluated only if a model name 
+      is used as a receiver, so we write M.f instead of c.f
+
+                           M \in dom(MTbl)
+                        f \in names(MTbl(M))
+                          MTble(M)(f) = tf
+                     ---------------------------                     (ST_CInvk)
+                      CTbl * MTbl ; M.f ==> tf
+
+    ttrue
+      no rules
+
+    tfalse
+      no rules
+
+    tif t1 t2 t3    (if t1 then t2 else t3)
+    
+             ----------------------------------------------         (ST_IfTrue)
+              CTbl * MTbl ; if true then t1 else t2 ==> t1
+
+            -----------------------------------------------        (ST_IfFalse)
+             CTbl * MTbl ; if false then t1 else t2 ==> t2
+
+                      CTbl * MTbl ; t1 ==> t1'
+   ------------------------------------------------------------------   (ST_If)
+   CTbl * MTbl ; (if t1 then t2 else t3) ==> (if t1' then t2 else t3)
+
+
+    tnat n
+      no rules
+
+    tsucc t1        (succ t1)
+    
+              ------------------------------------------            (ST_SuccNV)
+              CTbl * MTbl ; succ (tnat n) ==> tnat (S n)
+
+                      CTbl * MTbl ; t1 ==> t1'
+                ------------------------------------                  (ST_Succ)
+                 CTbl * MTbl ; succ t1 ==> succ t1'    
+
+
+    tpred t1        (pred t1)
+
+              --------------------------------------              (ST_PredZero)
+              CTbl * MTbl ; pred (tnat 0) ==> tnat 0
+
+             ------------------------------------------           (ST_PredSucc)
+             CTbl * MTbl ; pred (tnat (S n)) ==> tnat n
+
+                      CTbl * MTbl ; t1 ==> t1'
+                ------------------------------------                  (ST_Pred)
+                 CTbl * MTbl ; pred t1 ==> pred t1' 
+
+
+    tplus t1 t2     (plus t1 t2)
+
+       ---------------------------------------------------------    (ST_PlusNV)
+       CTbl * MTbl ; plus (tnat n1) (tnat n2) ==> tnat (n1 + n2)
+
+                      CTbl * MTbl ; t1 ==> t1'
+               ----------------------------------------              (ST_Plus1)
+               CTbl * MTbl ; plus t1 t2 ==> plus t1' t2 
+
+                              value v1
+                      CTbl * MTbl ; t2 ==> t2'
+               ----------------------------------------              (ST_Plus2)
+               CTbl * MTbl ; plus v1 t2 ==> plus v1 t2' 
+
+
+    tminus t1 t2    (minus t1 t2)
+
+      ----------------------------------------------------------   (ST_MinusNV)
+      CTbl * MTbl ; minus (tnat n1) (tnat n2) ==> tnat (n1 - n2)
+
+                      CTbl * MTbl ; t1 ==> t1'
+              ------------------------------------------            (ST_Minus1)
+              CTbl * MTbl ; minus t1 t2 ==> minus t1' t2 
+
+                              value v1
+                      CTbl * MTbl ; t2 ==> t2'
+              ------------------------------------------            (ST_Minus2)
+              CTbl * MTbl ; minus v1 t2 ==> minus v1 t2' 
+
+
+    tmult t1 t2     (mult t1 t2)
+
+       ---------------------------------------------------------    (ST_MultNV)
+       CTbl * MTbl ; mult (tnat n1) (tnat n2) ==> tnat (n1 * n2)
+
+                      CTbl * MTbl ; t1 ==> t1'
+               ----------------------------------------              (ST_Mult1)
+               CTbl * MTbl ; mult t1 t2 ==> mult t1' t2 
+
+                              value v1
+                      CTbl * MTbl ; t2 ==> t2'
+               ----------------------------------------              (ST_Mult2)
+               CTbl * MTbl ; mult v1 t2 ==> mult v1 t2' 
+
+
+    teqnat t1 t2    (eqnat t1 t2)
+
+      ----------------------------------------------------------   (ST_EqnatNV)
+      CTbl * MTbl ; eqnat (tnat n1) (tnat n2) ==> tnat (n1 = n2)
+
+                      CTbl * MTbl ; t1 ==> t1'
+              ------------------------------------------            (ST_Eqnat1)
+              CTbl * MTbl ; eqnat t1 t2 ==> eqnat t1' t2 
+
+                              value v1
+                      CTbl * MTbl ; t2 ==> t2'
+              ------------------------------------------            (ST_Eqnat2)
+              CTbl * MTbl ; eqnat v1 t2 ==> eqnat v1 t2'
+
+
+    tlenat t1 t2    (lenat t1 t2)
+
+      ----------------------------------------------------------   (ST_LenatNV)
+      CTbl * MTbl ; lenat (tnat n1) (tnat n2) ==> tnat (n1 < n2)
+
+                      CTbl * MTbl ; t1 ==> t1'
+              ------------------------------------------            (ST_Lenat1)
+              CTbl * MTbl ; lenat t1 t2 ==> lenat t1' t2 
+
+                              value v1
+                      CTbl * MTbl ; t2 ==> t2'
+              ------------------------------------------            (ST_Lenat2)
+              CTbl * MTbl ; lenat v1 t2 ==> lenat v1 t2'
+
+
+    tlet x t1 t2    (let x = t1 in t2)
+
+                           CTbl * MTbl ; t1 ==> t1'
+           ------------------------------------------------            (ST_Let)
+           CTbl * MTbl ; let x=t1 in t2 ==> let x=t1' in t2
+
+                              value v1
+              -------------------------------------------         (ST_LetValue)
+              CTbl * MTbl ; let x=v1 in t2 ==> [x:=v1] t2
 *)
 
-(*
-  | tvar  : id -> tm               (* x *)
-  | tapp  : tm -> tm -> tm         (* t1 t2 *)
-  | tabs  : id -> ty -> tm -> tm   (* \x:T11.t12 *)
-  | tmapp : tm -> id -> tm         (* t1 # M *)
-  | tcabs  : id -> id -> tm -> tm  (* \c#C.t1 *)
-  | tcinvk : id -> id -> tm        (* c.f *)                                 
-  | ttrue  : tm
-  | tfalse : tm
-  | tif : tm -> tm -> tm -> tm     (* if t1 then t2 else t3 *)
-  | tnat   : nat -> tm             (* n *)
-  | tsucc  : tm -> tm              (* succ t1 *) 
-  | tpred  : tm -> tm              (* pred t1 *)
-  | tplus  : tm -> tm -> tm        (* plus t1 t2 *)
-  | tminus : tm -> tm -> tm        (* minus t1 t2 *)
-  | tmult  : tm -> tm -> tm        (* mult t1 t2 *)
-  | teqnat : tm -> tm -> tm        (* eqnat t1 t2 *)
-  | tlenat : tm -> tm -> tm        (* lenat t1 t2 *)
-  | tlet   : id -> tm -> tm -> tm  (* let x = t1 in t2 *) 
-*)
