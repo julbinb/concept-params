@@ -243,6 +243,11 @@ Hint Unfold ids_singleton.
 Definition ids_union := IdSet.union.
 Hint Unfold ids_union.
 
+(** Test equality of sets  *)
+
+Definition ids_equal := IdSet.equal.
+Hint Unfold ids_equal.
+
 (** [set_from_list] builds a set of ids from a list of ids. *)
 
 Definition set_from_list (xs : list id) : id_set

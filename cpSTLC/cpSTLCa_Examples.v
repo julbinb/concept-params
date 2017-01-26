@@ -80,23 +80,30 @@ Module Examples.
   Definition tvy := tvar vy.
   Definition tvz := tvar vz.
 
+  Definition tn0 := tnat 0.
+  Definition tn1 := tnat 1.
+  Definition tn2 := tnat 2.
+  Definition tn3 := tnat 3.
+
   Definition tarithm1 := (* plus x 3 *)
-    tplus tvx (tnat 3).
+    tplus tvx tn3.
   Definition tarithm2 := (* eqnat (plus x 3) (pred y) *)
     teqnat tarithm1 (tpred tvy).
 
   Definition tfun1 := (* \x:Nat.lenat 0 x *)
-    tabs vx TNat (tlenat (tnat 0) tvx).
-  Definition tfun2 := (* mult ((\x:nat.succ x) (pred x)) (minus z 1) *)
-    tmult (tabs vx TNat (tsucc tvx)) (tminus tvz (tnat 1)).
+    tabs vx TNat (tlenat tn0 tvx).
+  Definition tfun2 := (* mult ((\x:nat.succ x) 2) (minus z 1) *)
+    tmult (tapp (tabs vx TNat (tsucc tvx)) tn2) (tminus tvz tn1).
+  Definition tfun3 := (* mult ((\x:nat.succ x) (pred x)) (minus z 1) *)
+    tmult (tapp (tabs vx TNat (tsucc tvx)) (tpred tvx)) (tminus tvz tn1).
 
   Definition tlet1 := (* let y = 3 in (eqnat y 0) *)
-    tlet vy (tnat 3) (teqnat tvy (tnat 0)).
-  Definition tlet2 := (* let x = (plus x 3) in (lenat x 5) *)
-    tlet vx tarithm1 (tlenat tvx (tnat 5)).
+    tlet vy tn3 (teqnat tvy tn0).
+  Definition tlet2 := (* let x = (plus x 3) in (lenat x 2) *)
+    tlet vx tarithm1 (tlenat tvx tn2).
 
-  Definition tif1 := (* if true then (let z = \x:Nat.lenat 0 x in z 1) else false *)
-    tif (ttrue) (tlet vx tfun1 (tapp tvz (tnat 1))) (tfalse).
+  Definition tif1 := (* if true then (let z = (\x:Nat.lenat 0 x) in z 1) else false *)
+    tif (ttrue) (tlet vz tfun1 (tapp tvz tn1)) (tfalse).
 
   (** Concept definitions *)
 
@@ -443,35 +450,40 @@ End Examples_ModelTypes.
 (* Tests / ------------------------------- *)
 Module TestFV. 
   Import Examples.
+  
+  Example test_free_vars_1 : 
+    ids_equal (free_vars tarithm1) (set_from_list [vx]) = true.
+  Proof. reflexivity. Qed.
 
-Eval compute in (ids_add vx ids_empty).
-Eval compute in (ids_singleton vx).
-  
-(*
-  Example test_free_vars_1 : (free_vars tarithm1) = set_from_list [vx].
-  Proof. simpl. unfold set_from_list. simpl. unfold ids_union.
-         unfold ids_singleton, ids_empty, ids_add. reflexivity. Qed.
-*)
-  
+  Example test_free_vars_2 : 
+    ids_equal (free_vars tarithm2) (set_from_list [vx; vy]) = true.
+  Proof. reflexivity. Qed.
+
+  Example test_free_vars_3 : 
+    ids_equal (free_vars tfun1) (set_from_list []) = true.
+  Proof. reflexivity. Qed.
+
+  (* Compute (free_vars tfun2).*)
+  Example test_free_vars_4 : 
+    ids_equal (free_vars tfun2) (set_from_list [vz]) = true.
+  Proof. reflexivity. Qed.
+
+  Example test_free_vars_5 : 
+    ids_equal (free_vars tfun3) (set_from_list [vx; vz]) = true.
+  Proof. reflexivity. Qed.
+
+  Example test_free_vars_6 : 
+    ids_equal (free_vars tlet1) (set_from_list []) = true.
+  Proof. reflexivity. Qed.
+
+  Example test_free_vars_7 : 
+    ids_equal (free_vars tlet2) (set_from_list [vx]) = true.
+  Proof. reflexivity. Qed.
+
+  Example test_free_vars_8 : 
+    ids_equal (free_vars tif1) (set_from_list []) = true.
+  Proof. reflexivity. Qed.
+
 End TestFV.
 (* / Tests ------------------------------- *)
 
-(*
-  Definition tarithm1 := (* plus x 3 *)
-    tplus tvx (tnat 3).
-  Definition tarithm2 := (* eqnat (plus x 3) (pred y) *)
-    teqnat tarithm1 (tpred tvy).
-
-  Definition tfun1 := (* \x:Nat.lenat 0 x *)
-    tabs vx TNat (tlenat (tnat 0) tvx).
-  Definition tfun2 := (* mult ((\x:nat.succ x) (pred x)) (minus z 1) *)
-    tmult (tabs vx TNat (tsucc tvx)) (tminus tvz (tnat 1)).
-
-  Definition tlet1 := (* let y = 3 in (eqnat y 0) *)
-    tlet vy (tnat 3) (teqnat tvy (tnat 0)).
-  Definition tlet2 := (* let x = (plus x 3) in (lenat x 5) *)
-    tlet vx tarithm1 (tlenat tvx (tnat 5)).
-
-  Definition tif1 := (* if true then (let z = \x:Nat.lenat 0 x in z 1) else false *)
-    tif (ttrue) (tlet vx tfun1 (tapp tvz (tnat 1))) (tfalse).
-*)

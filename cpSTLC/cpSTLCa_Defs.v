@@ -829,6 +829,65 @@ Fixpoint free_vars (t : tm) : id_set :=
       ids_union (free_vars t1) (IdSet.remove x t2_fv) 
   end.
 
+(** To define concept substitution, we will probably need 
+    free concept variables. *)
+
+Fixpoint free_cvars (t : tm) : id_set := 
+  match t with
+  (* FCV(x) = {} *)
+  | tvar x      => ids_empty  
+  | _ => ids_empty
+  end.
+
+(* ----------------------------------------------------------------- *)
+(** **** Substitution Function *)
+
+(** Let us first define a substitution informally.
+
+    For simplicity, we assume that all variables binded in different
+    lambdas are distinct (and we calculate closed terms only
+    or free vars do not appear in bindings), 
+    so we don't need renaming.
+
+       [x:=s] x               = s
+       [x:=s] y               = y                        if x <> y
+
+       [x:=s] (t1 t2)         = ([x:=s] t1) ([x:=s] t2)
+
+       [x:=s] (\x:T11. t12)   = \x:T11. t12
+       [x:=s] (\y:T11. t12)   = \y:T11. [x:=s]t12        if x <> y
+                                                         (and y \notin FV(s))
+
+       [x:=s] (t1 # M)        = ([x:=s] t1) # M
+       [x:=s] (t1 # M)        = ([x:=s] t1) # M
+       [x:=s] (t1 # M)        = ([x:=s] t1) # M
+       [x:=s] (t1 # M)        = ([x:=s] t1) # M
+
+       Note! The situation when y \in FV(s) must be impossible
+       under our assumptions.
+
+       [x:=s] true            = true
+       [x:=s] false           = false
+       [x:=s] (if t1 then t2 else t3) =
+                       if [x:=s]t1 then [x:=s]t2 else [x:=s]t3
+
+  | tabs  : id -> ty -> tm -> tm   (* \x:T11.t12 *)
+  | tmapp : tm -> id -> tm         (* t1 # M *)
+  | tcabs  : id -> id -> tm -> tm  (* \c#C.t1 *)
+  | tcinvk : id -> id -> tm        (* c.f *)                                 
+  | ttrue  : tm
+  | tfalse : tm
+  | tif : tm -> tm -> tm -> tm     (* if t1 then t2 else t3 *)
+  | tnat   : nat -> tm             (* n *)
+  | tsucc  : tm -> tm              (* succ t1 *) 
+  | tpred  : tm -> tm              (* pred t1 *)
+  | tplus  : tm -> tm -> tm        (* plus t1 t2 *)
+  | tminus : tm -> tm -> tm        (* minus t1 t2 *)
+  | tmult  : tm -> tm -> tm        (* mult t1 t2 *)
+  | teqnat : tm -> tm -> tm        (* eqnat t1 t2 *)
+  | tlenat : tm -> tm -> tm        (* lenat t1 t2 *)
+  | tlet   : id -> tm -> tm -> tm  (* let x = t1 in t2 *)   
+*)
 
 (*
 
