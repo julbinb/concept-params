@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Thu, 19 Jan 2017
+   Last Update: Wed, 25 Jan 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -784,7 +784,50 @@ Hint Constructors value.
 (* ----------------------------------------------------------------- *)
 (** **** Free Variables *)
 
-(** To define substitution, we will need free variables and free. *)
+(** To define substitution, we will need free variables. *)
+
+Fixpoint free_vars (t : tm) : id_set := 
+  match t with
+  (* FV(x) = {x} *)
+  | tvar x      => ids_singleton x  
+  (* FV(t1 t2) = FV(t1) \union FV(t2) *)
+  | tapp t1 t2  => ids_union (free_vars t1) (free_vars t2)
+  (* FV(\x:T.t) = FV(t) \ {x} *)                               
+  | tabs x T t  => let t_fv := free_vars t in
+      IdSet.remove x t_fv
+  (* FV(t # M) = FV(t) *)
+  | tmapp t M   => free_vars t
+  (* FV(\c#C.t) = FV(t) *)
+  | tcabs c C t => free_vars t
+  (* FV(c.f) = {} *)
+  | tcinvk c f  => ids_empty
+  (* FV(true) = {} *)
+  | ttrue       => ids_empty
+  (* FV(false) = {} *)
+  | tfalse      => ids_empty
+  (* FV(if t1 then t2 else t3) = FV(t1) \union FV(t2) \union FV(t3) *)
+  | tif t1 t2 t3 => ids_union (ids_union 
+      (free_vars t1) (free_vars t2)) (free_vars t3)
+  (* FV(n) = {} *)
+  | tnat n      => ids_empty
+  (* FV(succ t) = FV(t) *)
+  | tsucc t     => free_vars t
+  (* FV(pred t) = FV(t) *)
+  | tpred t     => free_vars t
+  (* FV(plus t1 t2) = FV(t1) \union FV(t2) *)
+  | tplus t1 t2  => ids_union (free_vars t1) (free_vars t2)
+  (* FV(minus t1 t2) = FV(t1) \union FV(t2) *)
+  | tminus t1 t2 => ids_union (free_vars t1) (free_vars t2)
+  (* FV(mult t1 t2) = FV(t1) \union FV(t2) *)
+  | tmult t1 t2  => ids_union (free_vars t1) (free_vars t2)
+  (* FV(eqnat t1 t2) = FV(t1) \union FV(t2) *)
+  | teqnat t1 t2 => ids_union (free_vars t1) (free_vars t2)
+  (* FV(lenat t1 t2) = FV(t1) \union FV(t2) *)
+  | tlenat t1 t2 => ids_union (free_vars t1) (free_vars t2) 
+  (* FV(let x=t1 in t2) = FV(t1) \union (FV(t2) \ {x}) *)       
+  | tlet x t1 t2 => let t2_fv := free_vars t2 in
+      ids_union (free_vars t1) (IdSet.remove x t2_fv) 
+  end.
 
 
 (*

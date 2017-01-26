@@ -2,7 +2,7 @@
 (* Mainly borrowed from Sofware Foundations, v.4 
    $Date: 2015-12-11 17:17:29 -0500 (Fri, 11 Dec 2015) $
 
-   Last Update: Mon, 31 Oct 2016
+   Last Update: Wed, 25 Jan 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -238,12 +238,18 @@ Hint Unfold ids_add.
 Definition ids_singleton := IdSet.singleton.
 Hint Unfold ids_singleton.
 
+(** Make union of sets  *)
+
+Definition ids_union := IdSet.union.
+Hint Unfold ids_union.
+
 (** [set_from_list] builds a set of ids from a list of ids. *)
 
 Definition set_from_list (xs : list id) : id_set
   := fold_left
        (fun s x => ids_add x s)
        xs ids_empty.
+Hint Unfold set_from_list.
 
 (* ================================================================= *)
 (** ** Map of Identifiers *)
