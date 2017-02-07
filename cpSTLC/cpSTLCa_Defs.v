@@ -784,8 +784,11 @@ Hint Constructors value.
 (* ----------------------------------------------------------------- *)
 (** **** Free Variables *)
 
-(** To define substitution, we will need free variables. *)
+(** To correctly apply substitution, we will need free variables. *)
 
+(** The only source of free vars is [tvar] constructor.
+    Lambda binds its variable.
+    All other forms of term needs recursive search of free vars. *)
 Fixpoint free_vars (t : tm) : id_set := 
   match t with
   (* FV(x) = {x} *)
@@ -831,13 +834,55 @@ Fixpoint free_vars (t : tm) : id_set :=
 
 (** To define concept substitution, we will probably need 
     free concept variables. *)
-
 Fixpoint free_cvars (t : tm) : id_set := 
   match t with
   (* FCV(x) = {} *)
   | tvar x      => ids_empty  
+  (* FCV(t1 t2) = FCV(t1) \union FCV(t2) *)
+  | tapp t1 t2  => ids_union (free_cvars t1) (free_cvars t2)
+  (* FCV(\x:T.t) = FCV(t) *)                               
+  | tabs x T t  => free_cvars t
+  (* FCV(t # M) = FCV(t) *)
+  | tmapp t M   => free_cvars t
+  (* FCV(\c#C.t) = FCV(t) \ {c} *)
+  | tcabs c C t => let t_fcv := free_cvars t in
+      IdSet.remove c t_fcv
+  (* FCV(c.f) = {c} *)
+  | tcinvk c f  => ids_singleton c
+  (* FV(true) = {} *)
+(*  | ttrue       => ids_empty
+  (* FV(false) = {} *)
+  | tfalse      => ids_empty
+  (* FV(if t1 then t2 else t3) = FV(t1) \union FV(t2) \union FV(t3) *)
+  | tif t1 t2 t3 => ids_union (ids_union 
+      (free_vars t1) (free_vars t2)) (free_vars t3)
+  (* FV(n) = {} *)
+  | tnat n      => ids_empty
+  (* FV(succ t) = FV(t) *)
+  | tsucc t     => free_vars t
+  (* FV(pred t) = FV(t) *)
+  | tpred t     => free_vars t
+  (* FV(plus t1 t2) = FV(t1) \union FV(t2) *)
+  | tplus t1 t2  => ids_union (free_vars t1) (free_vars t2)
+  (* FV(minus t1 t2) = FV(t1) \union FV(t2) *)
+  | tminus t1 t2 => ids_union (free_vars t1) (free_vars t2)
+  (* FV(mult t1 t2) = FV(t1) \union FV(t2) *)
+  | tmult t1 t2  => ids_union (free_vars t1) (free_vars t2)
+  (* FV(eqnat t1 t2) = FV(t1) \union FV(t2) *)
+  | teqnat t1 t2 => ids_union (free_vars t1) (free_vars t2)
+  (* FV(lenat t1 t2) = FV(t1) \union FV(t2) *)
+  | tlenat t1 t2 => ids_union (free_vars t1) (free_vars t2) 
+  (* FV(let x=t1 in t2) = FV(t1) \union (FV(t2) \ {x}) *)       
+  | tlet x t1 t2 => let t2_fv := free_vars t2 in
+      ids_union (free_vars t1) (IdSet.remove x t2_fv) *)
   | _ => ids_empty
+(* TODO *)
   end.
+
+(* ----------------------------------------------------------------- *)
+(** **** Alpha Conversion ??? *)
+
+(** Further *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Substitution Function *)
@@ -845,9 +890,14 @@ Fixpoint free_cvars (t : tm) : id_set :=
 (** Let us first define a substitution informally.
 
     For simplicity, we assume that all variables binded in different
-    lambdas are distinct (and we calculate closed terms only
-    or free vars do not appear in bindings), 
+    lambdas (and let-bindings)
+    are distinct (and we calculate closed terms only,
+      or free vars do not appear in bindings), 
     so we don't need renaming.
+    
+    The same should probably alsi be applied to concept parameters, 
+    concept names, and model names: 
+    no repetitions and intersections with variables.
 
        [x:=s] x               = s
        [x:=s] y               = y                        if x <> y
@@ -858,92 +908,130 @@ Fixpoint free_cvars (t : tm) : id_set :=
        [x:=s] (\y:T11. t12)   = \y:T11. [x:=s]t12        if x <> y
                                                          (and y \notin FV(s))
 
-       [x:=s] (t1 # M)        = ([x:=s] t1) # M
-       [x:=s] (t1 # M)        = ([x:=s] t1) # M
-       [x:=s] (t1 # M)        = ([x:=s] t1) # M
-       [x:=s] (t1 # M)        = ([x:=s] t1) # M
-
        Note! The situation when y \in FV(s) must be impossible
        under our assumptions.
 
+       [x:=s] (t1 # M)        = ([x:=s] t1) # M
+
+       [x:=s] (\c#C.t1)       = \c#C.([x:=s] t1)         must be
+                                                         x <> c?
+
+       [x:=s] (c.f)           = c.f                      must be
+                                                         x <> c?
+
        [x:=s] true            = true
        [x:=s] false           = false
-       [x:=s] (if t1 then t2 else t3) =
-                       if [x:=s]t1 then [x:=s]t2 else [x:=s]t3
 
-  | tabs  : id -> ty -> tm -> tm   (* \x:T11.t12 *)
-  | tmapp : tm -> id -> tm         (* t1 # M *)
-  | tcabs  : id -> id -> tm -> tm  (* \c#C.t1 *)
-  | tcinvk : id -> id -> tm        (* c.f *)                                 
-  | ttrue  : tm
-  | tfalse : tm
-  | tif : tm -> tm -> tm -> tm     (* if t1 then t2 else t3 *)
-  | tnat   : nat -> tm             (* n *)
-  | tsucc  : tm -> tm              (* succ t1 *) 
-  | tpred  : tm -> tm              (* pred t1 *)
-  | tplus  : tm -> tm -> tm        (* plus t1 t2 *)
-  | tminus : tm -> tm -> tm        (* minus t1 t2 *)
-  | tmult  : tm -> tm -> tm        (* mult t1 t2 *)
-  | teqnat : tm -> tm -> tm        (* eqnat t1 t2 *)
-  | tlenat : tm -> tm -> tm        (* lenat t1 t2 *)
-  | tlet   : id -> tm -> tm -> tm  (* let x = t1 in t2 *)   
+       [x:=s] (if t1 then t2 else t3) 
+                              =
+                       if [x:=s]t1 then [x:=s]t2 else [x:=s]t3
+                       
+       [x:=s] n               = n
+       
+       [x:=s] (succ t)        = succ ([x:=s] t)
+       [x:=s] (pred t)        = pred ([x:=s] t)
+
+       [x:=s] (plus t1 t2)    = plus ([x:=s] t1) ([x:=s] t2)
+       [x:=s] (minus t1 t2)   = minus ([x:=s] t1) ([x:=s] t2)
+       [x:=s] (mult t1 t2)    = mult ([x:=s] t1) ([x:=s] t2)
+       [x:=s] (eqnat t1 t2)   = eqnat ([x:=s] t1) ([x:=s] t2)
+       [x:=s] (lenat t1 t2)   = lenat ([x:=s] t1) ([x:=s] t2)
+       
+       [x:=s] (let x = t1 in t2)
+                              =
+                       let x = ([x:=s] t1) t2
+
+       [x:=s] (let y = t1 in t2)                         if y <> x
+                              =                          (and y \notin FV(s))
+                       let y = ([x:=s] t1) ([x:=s] t2)  
 *)
 
-(*
-
-Fixpoint subst (x:id) (s:tm) (t:tm) : tm :=
+(** Function [subst] takes var [x], terms [s] and [t].
+    It replaces all free occurences of [x] in term [t] with term [s]. *)
+Fixpoint subst (x : id) (s : tm) (t : tm) : tm :=
   match t with
-  | tvar y =>
-      if beq_id x y then s else t
-  | tabs y T t1 =>
-      tabs y T (if beq_id x y then t1 else (subst x s t1))
-  | tapp t1 t2 =>
-      tapp (subst x s t1) (subst x s t2)
-  | tnat n =>
-      tnat n
-  | tsucc t1 =>
-      tsucc (subst x s t1)
-  | tpred t1 =>
-      tpred (subst x s t1)
-  | tmult t1 t2 =>
-      tmult (subst x s t1) (subst x s t2)
-  | tif0 t1 t2 t3 =>
-      tif0 (subst x s t1) (subst x s t2) (subst x s t3)
-  | tpair t1 t2 =>
-      tpair (subst x s t1) (subst x s t2)
-  | tfst t1 =>
-      tfst (subst x s t1)
-  | tsnd t1 =>
-      tsnd (subst x s t1)
-  | tunit => tunit
-    (* [x := s] (let y = t1 in t2) *)           
-  | tlet y t1 t2 =>
-      tlet y (subst x s t1) (if beq_id x y then t2 else (subst x s t2))
-  | tinl T t1 =>
-      tinl T (subst x s t1)
-  | tinr T t1 =>
-      tinr T (subst x s t1)
-  | tcase t0 y1 t1 y2 t2 =>
-      tcase (subst x s t0)
-         y1 (if beq_id x y1 then t1 else (subst x s t1))
-         y2 (if beq_id x y2 then t2 else (subst x s t2))
-  | tnil T =>
-      tnil T
-  | tcons t1 t2 =>
-      tcons (subst x s t1) (subst x s t2)
-  | tlcase t1 t2 y1 y2 t3 =>
-      tlcase (subst x s t1) (subst x s t2) y1 y2
-        (if beq_id x y1 then
-           t3
-         else if beq_id x y2 then t3
-              else (subst x s t3))
-  | tfix t1 =>
-      tfix (subst x s t1)
+    | tvar y =>
+        if beq_id x y then s else t
+    | tapp t1 t2  =>
+        tapp (subst x s t1) (subst x s t2)
+    (* We assume that y \notin FV(s) *)
+    | tabs y T t1 =>
+        tabs y T (if beq_id x y then t1 else (subst x s t1))
+    | tmapp t1 M  =>
+        tmapp (subst x s t1) M
+    | tcabs c C t1 =>
+        tcabs c C (subst x s t1)
+    | tcinvk c f =>
+        tcinvk c f
+    | ttrue  => ttrue
+    | tfalse => tfalse
+    | tif t1 t2 t3 =>
+        tif (subst x s t1) (subst x s t2) (subst x s t3)
+    | tnat n =>
+        tnat n
+    | tsucc t1 =>
+        tsucc (subst x s t1)
+    | tpred t1 =>
+        tpred (subst x s t1)
+    | tplus t1 t2  =>
+        tplus (subst x s t1) (subst x s t2)
+    | tminus t1 t2 =>
+        tminus (subst x s t1) (subst x s t2)
+    | tmult t1 t2  =>
+        tmult (subst x s t1) (subst x s t2)
+    | teqnat t1 t2 =>
+        teqnat (subst x s t1) (subst x s t2)
+    | tlenat t1 t2 =>
+        tlenat (subst x s t1) (subst x s t2)
+    | tlet y t1 t2 => 
+        tlet y (subst x s t1) (if beq_id x y then t2 else (subst x s t2))
   end.
 
-Notation "'[' x ':=' s ']' t" := (subst x s t) (at level 20).
+Notation "'[' x ':=' s ']' t" := (subst x s t) (at level 20). 
 
- *)
+(** We will also need concept parameters substitution. *)
+
+(** Function [subst] takes concept parameter name [c], 
+      model name [M], and terms [t].
+    It replaces all free occurences of [c] in term [t] with term [s]. *)
+(*Fixpoint subst (c : id) (M : id) (t : tm) : tm :=
+  match t with
+    | tvar y =>
+        if beq_id x y then s else t
+    | tapp t1 t2  =>
+        tapp (subst x s t1) (subst x s t2)
+    (* We assume that y \notin FV(s) *)
+    | tabs y T t1 =>
+        tabs y T (if beq_id x y then t1 else (subst x s t1))
+    | tmapp t1 M  =>
+        tmapp (subst x s t1) M
+    | tcabs c C t1 =>
+        tcabs c C (subst x s t1)
+    | tcinvk c f =>
+        tcinvk c f
+    | ttrue  => ttrue
+    | tfalse => tfalse
+    | tif t1 t2 t3 =>
+        tif (subst x s t1) (subst x s t2) (subst x s t3)
+    | tnat n =>
+        tnat n
+    | tsucc t1 =>
+        tsucc (subst x s t1)
+    | tpred t1 =>
+        tpred (subst x s t1)
+    | tplus t1 t2  =>
+        tplus (subst x s t1) (subst x s t2)
+    | tminus t1 t2 =>
+        tminus (subst x s t1) (subst x s t2)
+    | tmult t1 t2  =>
+        tmult (subst x s t1) (subst x s t2)
+    | teqnat t1 t2 =>
+        teqnat (subst x s t1) (subst x s t2)
+    | tlenat t1 t2 =>
+        tlenat (subst x s t1) (subst x s t2)
+    | tlet y t1 t2 => 
+        tlet y (subst x s t1) (if beq_id x y then t2 else (subst x s t2))
+  end.*)
 
 
 (* ================================================================= *)

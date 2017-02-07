@@ -192,4 +192,11 @@ Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop.
 
 ```
 
+### Notes
+
+Our simple concepts do not contain type parameters/members,
+that is why types do not depend on _concept parameters_, 
+they can only include _concepts_ 
+(like type `C # T` of term `\c#C.t`).
+
 
