@@ -454,6 +454,14 @@ Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Pro
                    -----------------------------------                (T_CInvk)
                    CTable * MTable ; Gamma |- c.f : TF
 
+                            M \notin dom(Gamma)
+                             M \in dom(MTable)
+                          MTable(M) = ... of C ...
+                             C \in dom(CTable)
+                        CTable(C) = ... f : TF ...
+                   -----------------------------------                (T_MInvk)
+                   CTable * MTable ; Gamma |- M.f : TF
+
 
                   ------------------------------------                 (T_True)
                  CTable * MTable ; Gamma |- true : Bool
