@@ -112,7 +112,7 @@ Definition types_valid_b (st : cptcontext) (ts : list ty) : bool :=
 
 Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
   match nmlist with
-  | [] => true
+  | nil => true
   | nm :: nms => if ids_mem nm nmset 
                  then false
                  else  ids_are_unique_recur nms (ids_add nm nmset)
@@ -226,7 +226,16 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
          then c.f : TF *)
       match context_get_concept CTable Gamma c with
       | Some (CTdef Cbody) => find_ty f Cbody 
-      | None => None
+      (* if M \notin dom(Gamma), M = ... of C ..., 
+         C:CT \in CTable, and f:TF \in CT,
+         then M.f : TF *)
+      | None => match MTable c with
+                | Some (MTdef C Mbody) => match CTable C with
+                                          | Some (CTdef Cbody) => find_ty f Cbody 
+                                          | None => None
+                                          end
+                | None => None
+                end
       end
   | ttrue  => Some TBool
   | tfalse => Some TBool
