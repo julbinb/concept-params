@@ -860,6 +860,10 @@ Fixpoint free_vars (t : tm) : id_set :=
 (* ----------------------------------------------------------------- *)
 (** **** Alpha Conversion ??? *)
 
+(** We will only work with nicely defined terms, which satisfy
+    Barendregt variable convention:
+    all bindings introduce different variables *)
+
 (** We'll come back to this later... *)
 
 (* ----------------------------------------------------------------- *)
