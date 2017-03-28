@@ -6,7 +6,7 @@
    Properties of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Thu, 19 Jan 2017
+   Last Update: Mon, 27 Mar 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -41,9 +41,11 @@ Require Import Coq.omega.Omega.
 
 (* ################################################################# *)
 (** ** Syntax *)
+(* ################################################################# *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Types *)
+(* ----------------------------------------------------------------- *)
 
 Lemma beq_ty_refl : forall T1, beq_ty T1 T1 = true.
 Proof.
@@ -98,16 +100,28 @@ Proof.
     apply beq_ty__eq.
 Qed.
 
+(** Decidability of types' equivalence *)
+Lemma eq_ty_dec : forall x y : ty, {x = y} + {x <> y}.
+Proof.
+  intros x y.
+  destruct (beq_tyP x y).
+  left; assumption.
+  right; assumption.
+Qed.
+
 (* ################################################################# *)
 (** ** Program Well-definedness and Typing *)
+(* ################################################################# *)
 
 (* ================================================================= *)
 (** *** Checking Concepts *)
+(* ================================================================= *)
 
 (* ----------------------------------------------------------------- *)
-(** **** Concept Well-definedness *)
+(** **** Checking Ids' Uniqueness *)
+(* ----------------------------------------------------------------- *)
 
-(** First of all we want to prove that [ids_are_unique] is correct, 
+(** First of all we want to prove that [ids_are_unique] is sound, 
     i.e. if it returns true, than there is no duplicates in the list.    
 
     A bunch of auxiliary lemmas is needed to prove the main theorem.  
@@ -118,8 +132,11 @@ Qed.
 Module IdSetFacts := MSetFacts.WFacts IdSet.
 Module IdSetProps := MSetProperties.WProperties IdSet.
 
+Section IdSetProofs.
+
 Import IdSet.
 Import IdSetFacts.
+Import IdSetProps.
 
 Lemma mem_empty__false : forall (x : id),
     ids_mem x ids_empty = false.
@@ -303,83 +320,12 @@ Proof.
       apply IHl' in H. apply H in Hxl'. contradiction.
 Qed.            
 
-(** Here is the main [ids_are_unique] correctness theorem: *)
+(* ----------------------------------------------------------------- *)
 
-Theorem ids_are_unique__correct : forall (l : list id),
-    ids_are_unique l = true -> NoDup l.
-Proof.
-  intros l. induction l as [ | h l' IHl'].
-  - (* l = nil *)
-    intros H. apply NoDup_nil.
-  - (* l = h :: l' *)
-    intros H. apply ids_are_unique_cons in H as H'.
-    apply IHl' in H'.
-    apply NoDup_cons.
-    apply ids_are_unique_cons__not_in in H. assumption.
-    assumption.
-Qed.
+(** We prove the main [ids_are_unique] soundness theorem below. *)
 
-(** And the final steps to prove that [concept_well_defined_b]
-    is correct. *)
-
-Lemma type_valid_b__correct : forall (cst : cptcontext) (T : ty),
-    type_valid_b cst T = true ->
-    type_valid cst T.
-Proof.
-  intros cst T. generalize dependent cst.
-  induction T; intros cst H;
-    (* simple cases like TNat *)
-    try constructor;
-    (* using assumption *)
-    try (simpl in H; rewrite -> andb_true_iff in H;
-         inversion H as [H1 H2]; clear H).
-  - (* T1 -> T2 ... T1 *) apply IHT1 in H1. assumption.
-  - (* T1 -> T2 ... T2 *) auto.
-  - (* concept_defined *)
-    unfold concept_defined.
-    intros Hcontra. unfold concept_defined_b in H1.
-    destruct (cst i); tryfalse.
-  - (* type_valid *)
-    apply IHT in H2. assumption.
-Qed.
-
-(* Print types_valid_b. *)
-
-Lemma types_valid_b__correct : forall (cst : cptcontext) (ts : list ty),
-    types_valid_b cst ts = true ->
-    List.Forall (fun ftype => type_valid cst ftype) ts.
-Proof.
-  intros cst ts. unfold types_valid_b.
-  induction ts as [| t ts'];
-    intros H.
-  - (* ts = nil *)
-    apply Forall_nil.
-  - (* ts = t :: ts' *)
-    simpl in H. rewrite -> andb_true_iff in H.
-    inversion H as [Ht Hts']; clear H.
-    apply IHts' in Hts'. apply type_valid_b__correct in Ht.
-    apply Forall_cons; auto.
-Qed.
-
-Theorem concept_well_defined_b__correct : forall (cst : cptcontext) (C : conceptdef),
-    concept_welldefined_b cst C = true ->
-    concept_welldefined   cst C.
-Proof.
-  intros cst C. intros H.
-  unfold concept_welldefined_b in H. destruct C.
-  unfold concept_welldefined.
-  destruct (split (map namedecl_to_pair n)).
-  rewrite -> andb_true_iff in H. inversion H as [Hid Hty].
-  apply ids_are_unique__correct in Hid.
-  apply types_valid_b__correct in Hty.
-  split; auto.
-Qed.
-
-
-(** But we also have to prove the opposite side, soundness.
-    
-    Let's start with soundness of [ids_are_unique]:
-    if there is no dups in the list, then ids_are_unique is true. *)
+(** And we also have to prove the opposite side, completeness.
+    If there is no dups in the list, then ids_are_unique is true. *)
 
 Lemma ids_are_unique_recur_cons : forall (l : list id) (x : id) (s : id_set),
     ids_are_unique_recur (x :: l) s = true ->
@@ -478,9 +424,27 @@ Proof.
   apply ids_are_unique_recur__not_mem_add; auto.
 Qed.
 
+(* ----------------------------------------------------------------- *)
+
 (** Here is the main [ids_are_unique] soundness theorem: *)
 
 Theorem ids_are_unique__sound : forall (l : list id),
+    ids_are_unique l = true -> NoDup l.
+Proof.
+  intros l. induction l as [ | h l' IHl'].
+  - (* l = nil *)
+    intros H. apply NoDup_nil.
+  - (* l = h :: l' *)
+    intros H. apply ids_are_unique_cons in H as H'.
+    apply IHl' in H'.
+    apply NoDup_cons.
+    apply ids_are_unique_cons__not_in in H. assumption.
+    assumption.
+Qed.
+
+(** Here is the main [ids_are_unique] completeness theorem: *)
+
+Theorem ids_are_unique__complete : forall (l : list id),
     NoDup l -> ids_are_unique l = true.
 Proof.
   intros l. induction l as [ | h l' IHl'].
@@ -496,10 +460,59 @@ Proof.
     + reflexivity.
 Qed.
 
-(** And the final steps to prove that [concept_well_defined_b]
-    is sound. *)
+(* ----------------------------------------------------------------- *)
+(** **** Types Validity *)
+(* ----------------------------------------------------------------- *)
+
+(** We need to prove that type-validity checks are also
+  * sound and complete. *)
+
+(** Soundness. *)
 
 Lemma type_valid_b__sound : forall (cst : cptcontext) (T : ty),
+    type_valid_b cst T = true ->
+    type_valid cst T.
+Proof.
+  intros cst T. generalize dependent cst.
+  induction T; intros cst H;
+    (* simple cases like TNat *)
+    try constructor;
+    (* using assumption *)
+    try (simpl in H; rewrite -> andb_true_iff in H;
+         inversion H as [H1 H2]; clear H).
+  - (* T1 -> T2 ... T1 *) apply IHT1 in H1. assumption.
+  - (* T1 -> T2 ... T2 *) auto.
+  - (* concept_defined *)
+    unfold concept_defined.
+    intros Hcontra. unfold concept_defined_b in H1.
+    destruct (cst i); tryfalse.
+  - (* type_valid *)
+    apply IHT in H2. assumption.
+Qed.
+
+(* Print types_valid_b. *)
+
+Lemma types_valid_b__sound : forall (cst : cptcontext) (ts : list ty),
+    types_valid_b cst ts = true ->
+    List.Forall (fun ftype => type_valid cst ftype) ts.
+Proof.
+  intros cst ts. unfold types_valid_b.
+  induction ts as [| t ts'];
+    intros H.
+  - (* ts = nil *)
+    apply Forall_nil.
+  - (* ts = t :: ts' *)
+    simpl in H. rewrite -> andb_true_iff in H.
+    inversion H as [Ht Hts']; clear H.
+    apply IHts' in Hts'. apply type_valid_b__sound in Ht.
+    apply Forall_cons; auto.
+Qed.
+
+(* ----------------------------------------------------------------- *)
+
+(** Completeness. *)
+
+Lemma type_valid_b__complete : forall (cst : cptcontext) (T : ty),
     type_valid cst T ->
     type_valid_b cst T = true.
 Proof.
@@ -520,7 +533,7 @@ Proof.
     (* type_valid *) assumption.
 Qed.
 
-Lemma types_valid_b__sound : forall (cst : cptcontext) (ts : list ty),
+Lemma types_valid_b__complete : forall (cst : cptcontext) (ts : list ty),
     List.Forall (fun ftype => type_valid cst ftype) ts ->
     types_valid_b cst ts = true.
 Proof.
@@ -532,11 +545,32 @@ Proof.
   - (* ts = t :: ts' *)
     inversion H; subst.
     simpl. rewrite -> andb_true_iff. split.
-    + apply type_valid_b__sound. assumption.
+    + apply type_valid_b__complete. assumption.
     + apply IHts'. assumption.
 Qed.
 
+(* ----------------------------------------------------------------- *)
+(** **** Concept Well-definedness *)
+(* ----------------------------------------------------------------- *)
+
+(** And the final steps to prove that [concept_well_defined_b]
+    is sound and complete. *)
+
 Theorem concept_well_defined_b__sound : forall (cst : cptcontext) (C : conceptdef),
+    concept_welldefined_b cst C = true ->
+    concept_welldefined   cst C.
+Proof.
+  intros cst C. intros H.
+  unfold concept_welldefined_b in H. destruct C.
+  unfold concept_welldefined.
+  destruct (split (map namedecl_to_pair n)).
+  rewrite -> andb_true_iff in H. inversion H as [Hid Hty].
+  apply ids_are_unique__sound in Hid.
+  apply types_valid_b__sound in Hty.
+  split; auto.
+Qed.
+
+Theorem concept_well_defined_b__complete : forall (cst : cptcontext) (C : conceptdef),
     concept_welldefined   cst C ->
     concept_welldefined_b cst C = true.
 Proof.
@@ -546,15 +580,29 @@ Proof.
   destruct C. destruct (split (map namedecl_to_pair n)).
   inversion H as [Hdup Htys].
   rewrite -> andb_true_iff. split.
-  apply ids_are_unique__sound in Hdup. assumption.
-  apply types_valid_b__sound. assumption.
+  apply ids_are_unique__complete in Hdup. assumption.
+  apply types_valid_b__complete. assumption.
 Qed.
 
+End IdSetProofs.
 
 (* ----------------------------------------------------------------- *)
 (** **** Concept Typing *)
+(* ----------------------------------------------------------------- *)
 
-(** As usually, we need some auxiliary lemmas to connect AVL maps. *)
+(** Now we want to prove that the function [concept_type_check] 
+  * is sound and complete. *)
+
+(** Similarly to IdSets, we need some auxiliary 
+  * lemmas to connect AVL maps with lists presenting AST. *)
+
+Module IdMapFacts := FMapFacts.WFacts IdMap.
+Module IdMapProps := FMapFacts.WProperties IdMap.
+
+Section IdMapProofs.
+
+Import IdMapFacts.
+Import IdMapProps.
 
 Lemma map_from_list_not_in__preserves_mapping : 
   forall (pnds : list (prod id ty)) (nm : id) (tp : ty)(m : id_map ty),  
@@ -619,7 +667,6 @@ Proof.
   apply map_from_list_add_unique__preserves_mapping. auto.
 Qed.
 
-
 Lemma split_fst__map_fst : forall {A B : Type} (l : list (prod A B)) 
                                   (xs : list A) (ys : list B),
     split l = (xs, ys) -> 
@@ -639,114 +686,430 @@ Proof.
       apply IHl' with (ys := l0). reflexivity.
 Qed.
 
-(*
-Lemma map_from_list__any_map : 
-  forall (pnds : list (prod id ty)) (nm : id) (tp : ty) (m : id_ty_map),  
-    List.In nm (map fst pnds) ->
-    (*List.NoDup (map fst pnds) ->*)
-    IdMap.MapsTo nm tp (map_from_list' pnds m) ->
-    forall (m' : id_map ty), IdMap.MapsTo nm tp (map_from_list' pnds m').
+Lemma map_from_list'__eq_maps : 
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty) (m m': id_ty_map), 
+    IdMap.Equal m' m ->
+    IdMap.MapsTo nm tp (map_from_list' pnds m)
+    -> 
+    IdMap.MapsTo nm tp (map_from_list' pnds m').
 Proof.
   intros pnds. induction pnds as [|pnd pnds' IHpnds'].
   - (* pnds = nil *)
-    intros nm tp m Hin (*Hdup*) Hmaps m'. 
+    intros nm tp m m' Heq Hmaps. 
+    simpl in *. 
+    eapply Equal_mapsto_iff; eauto.
+  - (* pnds = pnd :: pnds' *)
+    intros nm tp m m' Heq Hmaps.
+    destruct pnd as [x v]; simpl in *.
+    eapply IHpnds'.
+    assert (H : IdMap.Equal (mids_add ty x v m') (mids_add ty x v m)).
+    { apply add_m; tauto. }
+    eassumption.
+    assumption.
+Qed.
+
+Lemma permute_add__eq_maps :
+  forall (nm x : id) (tp v : ty) (m : id_ty_map), 
+  x <> nm ->
+  IdMap.Equal (mids_add ty x v (mids_add ty nm tp m))
+              (mids_add ty nm tp (mids_add ty x v m)).
+Proof.
+  intros nm x tp v m Hneq.
+  apply Equal_mapsto_iff.
+  intros k e. split.
+    + intros H1.
+      apply add_mapsto_iff in H1; propositional.
+      subst. apply add_mapsto_iff.
+      right.
+      pose proof (eq_id_dec nm k) as Hid.
+      inversion Hid. subst. simpl in *.
+      assert (contra : k = k) by reflexivity.
+      apply Hneq in contra.
+      contradiction.
+      split; auto.
+      apply add_mapsto_iff.
+      left. split; auto.
+      apply add_mapsto_iff in H1; propositional.
+      subst. apply add_mapsto_iff.
+      left. split; reflexivity.
+      apply add_mapsto_iff.
+      right. split; auto.
+      apply add_mapsto_iff.
+      right. split; auto.
+    + intros H1.
+      apply add_mapsto_iff in H1; propositional.
+      subst. apply add_mapsto_iff.
+      right.
+      pose proof (eq_id_dec x k) as Hid.
+      inversion Hid. subst. simpl in *.
+      assert (contra : k = k) by reflexivity.
+      apply Hneq in contra.
+      contradiction.
+      split; auto.
+      apply add_mapsto_iff.
+      left. split; auto.
+      apply add_mapsto_iff in H1; propositional.
+      subst. apply add_mapsto_iff.
+      left. split; reflexivity.
+      apply add_mapsto_iff.
+      right. split; auto.
+      apply add_mapsto_iff.
+      right. split; auto.
+Qed.
+
+Lemma map_from_list'__ignore_list_add :
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty) (m : id_ty_map),  
+  ~ List.In nm (map fst pnds) ->
+  IdMap.MapsTo nm tp (map_from_list' pnds (mids_add ty nm tp m)).
+Proof.
+  intros pnds. induction pnds as [|pnd pnds' IHpnds'].
+  - intros. simpl.
+    apply IdMap.add_1. reflexivity.
+  - intros nm tp m H.
+    destruct pnd as [x v]. simpl. 
+    apply map_from_list'__eq_maps with
+      (m := (mids_add ty nm tp (mids_add ty x v m))).
+    apply permute_add__eq_maps.
+    simpl in H. unfold not. intros contra.
+    eapply or_introl in contra.
+    apply H in contra. contradiction.
+    apply IHpnds'.
+    unfold not in *. intros contra.
+    assert (H1 : List.In nm (map fst ((x, v) :: pnds')))
+      by (simpl; right;  assumption).
+    tauto.
+Qed.
+
+Lemma map_from_list'__ignore_list' :
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty) (m : id_ty_map),  
+  ~ List.In nm (map fst pnds) ->
+  IdMap.MapsTo nm tp m ->
+  IdMap.MapsTo nm tp (map_from_list' pnds m).
+Proof.
+  intros pnds. induction pnds as [|pnd pnds' IHpnds'].
+  - intros. simpl. assumption.
+  - intros nm tp m Hin Hmaps.
+    destruct pnd as [x v]. simpl. 
+    apply IHpnds'.
+    simpl in Hin. unfold not in *.
+    intros H.
+    assert (contra : x = nm \/ List.In nm (map fst pnds'))
+      by (right; assumption).
+    tauto.
+    apply add_mapsto_iff.
+    pose proof (eq_id_dec x nm) as Heq. inversion Heq.
+    unfold not in *. simpl in *.
+    assert (contra : x = nm \/ List.In nm (map fst pnds'))
+      by (left; assumption).
+    tauto.
+    right. split; auto.
+Qed.
+
+Lemma map_from_list'__ignore_list :
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty) (m : id_ty_map),  
+  ~ List.In nm (map fst pnds) ->
+  IdMap.MapsTo nm tp (map_from_list' pnds m) ->
+  IdMap.MapsTo nm tp m.
+Proof.
+  intros pnds. induction pnds as [|pnd pnds' IHpnds'].
+  - intros. simpl in *. assumption.
+  - intros nm tp m Hin Hmaps.
+    destruct pnd as [x v]. simpl in *. 
+    assert (Hin' : ~ List.In nm (map fst pnds')).
+    { unfold not in *. intros contra.
+      apply Hin. tauto. }  
+    specialize (IHpnds' nm tp (mids_add ty x v m) Hin' Hmaps).
+    apply add_mapsto_iff in IHpnds'.
+    inversion IHpnds'.
+    tauto.
+    tauto.
+Qed.
+
+Lemma map_from_list__any_map : 
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty) (m m' : id_ty_map),  
+    List.In nm (map fst pnds) ->
+    (*List.NoDup (map fst pnds)  -> *)
+    IdMap.MapsTo nm tp (map_from_list' pnds m) ->
+    IdMap.MapsTo nm tp (map_from_list' pnds m').
+Proof.
+  intros pnds. induction pnds as [|pnd pnds' IHpnds'].
+  - (* pnds = nil *)
+    intros nm tp m m' Hin (* Hdup *) Hmaps. 
     simpl in Hin. contradiction.
   - (* pnds = pnd :: pnds' *)
-    intros nm tp m Hin (*Hdup*) Hmaps m'.
-    simpl. simpl in Hmaps. 
-    simpl in Hin. inversion Hin as [Hnmeq | Hin']. 
-    + subst. simpl in Hdup. subst.
-    apply IHpnds' with (m := (let (x, v) := pnd in mids_add ty x v m)).
-    simpl in Hin. inversion Hin as [Hnmeq | Hin']. 
-    + simpl in Hdup. subst.
+    intros nm tp m m' Hin (* Hdup *) Hmaps.
+    simpl. simpl in Hmaps.
+    destruct pnd as [x v].       
+    pose proof (in_dec eq_id_dec nm (map fst pnds')) as Hindec.
+    inversion Hindec as [Hinnm | Hinnm].
+    + eapply IHpnds'.
+      assumption.
+      eassumption.
+    + simpl in Hin. inversion Hin.
+      { subst.
+        pose proof (map_from_list'__ignore_list 
+                      pnds' nm tp (mids_add ty nm v m) Hinnm Hmaps) as Hnm.
+        apply add_mapsto_iff in Hnm; propositional.
+        subst.
+        apply map_from_list'__ignore_list_add.
+        assumption. } 
+      tauto.
+Qed.
 
-Abort.
-*)
-
-(*
-Lemma map_from_list__cons_ignore : forall (nds : list namedecl)
-                                          (nm : id) (tp : ty) (x : id) (v : ty)
-                                          (m : id_ty_map),
-    let pnds := map namedecl_to_pair nds in
-    find_ty nm (map_from_list' pnds m) = Some tp ->
-    List.In nm (List.map fst pnds) ->
-    find_ty nm (map_from_list' pnds (mids_add ty x v m)) = Some tp.
+Lemma elem_in_map'__elem_in_list' :
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty) (m : id_ty_map),
+    IdMap.MapsTo nm tp
+                 (map_from_list' pnds m) ->
+    ~ (IdMap.In nm m) ->
+    List.In nm (map fst pnds).
 Proof.
-  intros nds nm tp x v m. intros pnds.
-  generalize dependent m.
-  generalize dependent v. generalize dependent x.
-  generalize dependent tp. generalize dependent nm.
-  induction pnds as [|pnd pnds' IHpnds'].
+  intros pnds. 
+  induction pnds as [| pnd pnds' IHpnds'].
+  - intros. simpl in H. 
+    apply IdMap.find_1 in H.
+    assert (Hfind : IdMap.find (elt:=ty) nm m <> None).
+    equality.    
+    rewrite <- in_find_iff in Hfind.
+    apply H0 in Hfind. contradiction.
+  - intros. destruct pnd as [x v].
+    simpl in *.
+    destruct (beq_idP nm x).
+    + equality.
+    + right.
+      apply IHpnds' with (tp := tp) (m := (mids_add ty x v m)).
+      assumption.
+      unfold "~". intro Hin.
+(*
+add_in_iff:
+  forall (elt : Type) (m : IdMap.t elt) (x y : IdMap.key) (e : elt),
+  IdMap.In (elt:=elt) y (IdMap.add x e m) <-> x = y \/ IdMap.In (elt:=elt) y m
+*)      
+      rewrite add_in_iff in Hin.
+      inversion Hin. equality.
+      apply H0 in H1.
+      assumption.
+Qed.
+
+Lemma elem_in_map'__elem_in_list :
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty),
+    IdMap.MapsTo nm tp
+                 (map_from_list' pnds (mids_empty ty)) ->
+    List.In nm (map fst pnds).
+Proof.
+  intros pnds nm tp Hmaps.
+  apply elem_in_map'__elem_in_list' with (tp := tp) (m := (mids_empty ty)).
+  assumption.
+  unfold not. 
+  intros contra. rewrite empty_in_iff in contra.
+  assumption.
+Qed.
+
+Lemma map_from_list'_preserves_eq :
+  forall (pnds : list (id * ty)%type) (m m' : id_ty_map),
+    IdMap.Equal m m' ->
+    IdMap.Equal (map_from_list' pnds m) (map_from_list' pnds m').
+Proof.
+  intros pnds. induction pnds as [|pnd pnds' IHpnds'].
   - (* pnds = nil *)
-    intros nm tp x v m H Hin. 
-    inversion Hin.
+    intros m m' Heq. simpl.
+    assumption.
   - (* pnds = pnd :: pnds' *)
-    intros nm tp x v m H Hin. induction Hin.
-    destruct pnd as [nm1 tp1]. simpl.
-    apply IHpnds'. simpl in H.
-
-    simpl in H. apply IHpnds' with (x := x) (v := v) in H.
+    intros m m' Heq. destruct pnd as [x v].
     simpl.
-Abort.
-*)
+    apply IHpnds'.
+    apply F.add_m; tauto.
+Qed.
 
-Theorem concept_type_check__correct : forall (cst : cptcontext) 
-                                             (C : conceptdef) (CT : cty),  
+Lemma map_from_list_cons_cardinal' :
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty) (m : id_ty_map),
+    ~ List.In nm (map fst pnds) ->
+    ~ IdMap.In nm m ->
+    IdMap.cardinal (elt:=ty) (map_from_list' ((nm, tp) :: pnds) m)
+    = S (IdMap.cardinal (elt:=ty) (map_from_list' pnds m)).
+Proof.
+  intros pnds. induction pnds as [|pnd pnds' IHpnds'].
+  - (* pnds = nil *)
+    intros nm tp m Hin Hmap. simpl.
+    rewrite <- cardinal_2 with (m' := (mids_add ty nm tp m))
+                              (x := nm) (e := tp).
+    reflexivity.
+    assumption.
+    unfold Add. intros y.
+    reflexivity.
+  - (* pnds = pnd :: pnds' *)
+    intros nm tp m Hin Hmap. destruct pnd as [x v].
+    simpl in *.
+    assert (Heq : IdMap.Equal 
+                    (map_from_list' pnds' (mids_add ty x v (mids_add ty nm tp m)))
+                    (map_from_list' pnds' (mids_add ty nm tp (mids_add ty x v m)))).
+    { apply map_from_list'_preserves_eq.
+      apply permute_add__eq_maps.
+      tauto. }
+    rewrite Heq.
+    apply IHpnds'.
+    tauto. 
+    unfold not. intros contra.
+    rewrite F.add_in_iff in contra.
+    inversion contra; tauto.
+Qed.
+
+Lemma map_from_list_cons_cardinal :
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty),
+    ~ List.In nm (map fst pnds) ->
+    IdMap.cardinal (elt:=ty) (map_from_list ((nm, tp) :: pnds))
+    = S (IdMap.cardinal (elt:=ty) (map_from_list pnds)).
+Proof.
+  intros pnds. induction pnds as [|pnd pnds' IHpnds'].
+  - (* pnds = nil *)
+    intros nm tp Hin. 
+    reflexivity.
+  - (* pnds = pnd :: pnds' *)
+    intros nm tp Hin. destruct pnd as [x v].
+    assert (Heq : 
+    IdMap.cardinal (elt:=ty) (map_from_list ((nm, tp) :: (x, v) :: pnds'))
+    = S (IdMap.cardinal (elt:=ty) (map_from_list ((x, v) :: pnds')))).
+    { change (IdMap.cardinal (elt:=ty) 
+                (map_from_list' ((nm, tp) :: (x, v) :: pnds') (mids_empty ty)) 
+              =
+              S (IdMap.cardinal (elt:=ty) (
+                   map_from_list' ((x, v) :: pnds') (mids_empty ty)))).
+      apply map_from_list_cons_cardinal'.
+      assumption.
+      unfold not. intros contra.
+      rewrite F.empty_in_iff in contra. 
+      tauto. }
+    rewrite Heq.
+    unfold map_from_list in *. reflexivity.
+Qed.
+
+Lemma concept_welldefined_b__cons :
+  forall cst Cnm nd nds,
+    concept_welldefined_b cst (cpt_def Cnm (nd :: nds)) = true ->
+    concept_welldefined_b cst (cpt_def Cnm nds) = true.
+Proof.
+  intros cst Cnm nd nds H.
+  simpl in *.
+  destruct (namedecl_to_pair nd) as [nm tp].
+  destruct (split (map namedecl_to_pair nds)) as [fnames' ftypes'].
+  apply andb_true_iff.
+  apply andb_true_iff in H.
+  propositional.
+  apply ids_are_unique__sound in H0. 
+    inversion H0. apply ids_are_unique__complete in H4.
+    assumption.
+  simpl in H1.  
+    apply andb_true_iff in H1; propositional.
+Qed.
+
+(* ----------------------------------------------------------------- *)
+
+(** Here is the main [concept_type_check] soundness theorem. *)
+
+Theorem concept_type_check__sound : 
+  forall (cst : cptcontext) (C : conceptdef) (CT : cty),  
     concept_type_check cst C = Some CT ->
     concept_has_type cst C CT.
 Proof.
   intros cst C CT.
   unfold concept_type_check. 
-  destruct (concept_welldefined_b cst C) eqn: HCdef. 
-  (* C welldefined *)
-  destruct C as [Cnm nds]. intros H.
-  inversion H; subst. clear H.
+  destruct (concept_welldefined_b cst C) eqn: HCdef; 
+    [ idtac | 
+      (* the second goal goes away: None = Some _ *)
+      simplify; try solve_by_invert ].  
+  (* C welldefined_b -> concept_has_type *)
+  destruct C as [Cnm nds]. 
+  intros H. inversion H; subst. clear H.
+  pose proof (concept_well_defined_b__sound cst _ HCdef) as Hsound.
   unfold concept_has_type. split.
-  - apply concept_well_defined_b__correct in HCdef. assumption.
-  - split. 
-    + (* forall find_ty*)
-      induction nds as [| d nds' IHnds']. 
-      apply Forall_nil.
-      apply Forall_cons. destruct d. 
+  (* concept_welldefined *) 
+  assumption.
+  (* all types are presented and valid,
+   * and length is correct *)
+  unfold concept_welldefined (*, concept_welldefined_b *) in *.
+  split. 
+  - (* forall find_ty*)
+    induction nds as [| d nds' IHnds']. 
+    apply Forall_nil.
+    (* Forall_cons *)
+    destruct d; simpl in HCdef.
+    remember (map namedecl_to_pair nds') as pnds'.
+    destruct (split pnds') as [nms tps] eqn:eqpnds'.
+    rewrite andb_true_iff in HCdef. inversion HCdef as [Huniq Hvalid].
+    clear HCdef.
+    apply ids_are_unique__sound in Huniq. 
+    apply Forall_cons(*; destruct d; simpl in HCdef*).
+    + (* head *)
       simpl. apply map_from_list__find_cons__true.
       (* ~ List.In i (map fst (map namedecl_to_pair nds')) *)
-      simpl in HCdef. 
-      remember (map namedecl_to_pair nds') as pnds'.
-      destruct (split pnds') as [nms tps] eqn:eqpnds'.
-      rewrite andb_true_iff in HCdef. inversion HCdef as [Huniq Hvalid].
-      apply ids_are_unique__correct in Huniq. inversion Huniq; subst.
+      inversion Huniq; subst.
       replace (map fst (map namedecl_to_pair nds')) with nms.
-      assumption. apply split_fst__map_fst in eqpnds'. auto.
+      assumption. 
+      apply split_fst__map_fst in eqpnds'. auto.
 (*
 Forall_impl:
   forall (A : Type) (P Q : A -> Prop),
   (forall a : A, P a -> Q a) -> forall l : list A, Forall P l -> Forall Q l
-*)
+ *)
+    + (* tail *)
+      subst.
       apply Forall_impl with (P := fun nmdecl : namedecl =>
               match nmdecl with
               | nm_decl f T =>
                   find_ty f (map_from_list (map namedecl_to_pair nds')) = Some T
               end).
       intros [f T] H.
-      simpl. unfold map_from_list. simpl.
-(*
-      unfold concept_welldefined_b in HCdef.
-unfold map_from_list. unfold find_ty, mids_find. 
-    simpl. 
-  (* unfold concept_has_type in H. inversion H as [Hwd HCT]. clear H. *)
-*)
-Abort.
-
-
-
-(*
-
-Lemma id_set_In__add_permute : forall (x y z : id) (s : id_set),
-    IdSet.In x (ids_add y (ids_add z s)) ->
-    IdSet.In x (ids_add z (ids_add y s)).
-n__add_permute.
+      simpl.
+      apply IdMap.find_2 in H.
+      apply IdMap.find_1.
+      change (IdMap.MapsTo f T 
+             (map_from_list' ((i, t) :: map namedecl_to_pair nds') 
+                             (mids_empty ty))).
+      change (IdMap.MapsTo f T 
+             (map_from_list' (map namedecl_to_pair nds') 
+                             (mids_empty ty))) in H.
+      simpl.
+      apply map_from_list__any_map with (m := (mids_empty ty)).     
+      apply elem_in_map'__elem_in_list with (tp := T).
+      assumption. assumption.
+      (* forall implication *)
+      inversion Huniq; subst; simpl in *.
+      apply IHnds'.
+      unfold concept_welldefined_b.
+      destruct (split (map namedecl_to_pair nds')) as [fnames ftypes].
+      inversion eqpnds'. subst.
+      apply andb_true_iff; split.
+      apply ids_are_unique__complete. assumption.
+      apply andb_true_iff in Hvalid. inversion Hvalid; auto.
+      split; auto.
+      destruct (split (map namedecl_to_pair nds')) as [fnames' ftypes'].
+      inversion Hsound.
+      inversion H0. inversion eqpnds'. subst.
+      assumption.
+  - (* length *)
+    induction nds as [| d nds' IHnds']. 
+    reflexivity.
+    destruct d as [nm tp].
+    simpl.
+    rewrite map_from_list_cons_cardinal.
+    apply f_equal.
+    apply IHnds'.
+    apply concept_welldefined_b__cons with (nd := nm_decl nm tp); assumption.
+    simpl in Hsound.
+    destruct (split (map namedecl_to_pair nds')) as [fnames ftypes].
+    propositional.
+    inversion H; tauto.
+    inversion H0; tauto.
+    (* ~ List.In *)
+    simpl in Hsound.
+    destruct (split (map namedecl_to_pair nds')) as [fnames ftypes] eqn:Heq.
+    propositional.
+    inversion H0. apply split_fst__map_fst in Heq. subst.
+    tauto.
 Qed.
 
+End IdMapProofs.
+
+(*
 Lemma mem_add_permute : forall (x y z : id) (s : id_set),
     ids_mem x (ids_add y (ids_add z s))
     = ids_mem x (ids_add z (ids_add y s)).

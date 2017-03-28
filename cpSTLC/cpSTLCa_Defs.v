@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Wed, 25 Jan 2017
+   Last Update: Mon, 27 Mar 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -37,6 +37,7 @@ Require Import Coq.omega.Omega.
 
 (* ################################################################# *)
 (** ** Syntax *)
+(* ################################################################# *)
 
 (** cpSTLCa — Symply Typed Lambda Calculus 
     with simple _concept parameters_.
@@ -127,6 +128,7 @@ Require Import Coq.omega.Omega.
 
 (* ----------------------------------------------------------------- *)
 (** **** Types *)
+(* ----------------------------------------------------------------- *)
 
 Inductive ty : Type :=
   | TBool : ty 
@@ -137,6 +139,7 @@ Inductive ty : Type :=
 
 (* ----------------------------------------------------------------- *)
 (** **** Terms *)
+(* ----------------------------------------------------------------- *)
 
 Inductive tm : Type :=
   | tvar  : id -> tm               (* x *)
@@ -161,6 +164,7 @@ Inductive tm : Type :=
 
 (* ----------------------------------------------------------------- *)
 (** **** Concepts *)
+(* ----------------------------------------------------------------- *)
 
 (** Name declaration *)
 
@@ -195,6 +199,7 @@ Hint Unfold conceptsec.
 
 (* ----------------------------------------------------------------- *)
 (** **** Models *)
+(* ----------------------------------------------------------------- *)
 
 (** Name definition *)
 
@@ -229,6 +234,7 @@ Hint Unfold modelsec.
 
 (* ----------------------------------------------------------------- *)
 (** **** Program *)
+(* ----------------------------------------------------------------- *)
 
 Inductive program : Type :=
   | tprog : conceptsec -> modelsec -> tm -> program
@@ -239,6 +245,7 @@ Inductive program : Type :=
 
 (* ################################################################# *)
 (** ** Typing *)
+(* ################################################################# *)
 
 (** To typecheck terms with concept parameters, we need 
     information about concepts and models.
@@ -318,9 +325,11 @@ Definition mstempty : mdlcontext := @empty mty.
 
 (* ================================================================= *)
 (** *** Checking Types Validity *)
+(* ================================================================= *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Concept Definitions *)
+(* ----------------------------------------------------------------- *)
 
 (** Concept definition is Ok if names of concept elements are
     distinct, and types of elements are valid.
@@ -389,6 +398,7 @@ Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Pro
 
 (* ================================================================= *)
 (** *** Typing of Terms *)
+(* ================================================================= *)
 
 (** To typecheck terms we need:
     - context [Gamma], which (in contrast to STLC) contains not only
@@ -625,6 +635,7 @@ Hint Constructors has_type.
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Model Definitions *)
+(* ----------------------------------------------------------------- *)
 
 (** Model definition is Ok if:
     - concept name is defined;
@@ -699,6 +710,7 @@ Definition model_has_type (cst : cptcontext) (mst : mdlcontext)
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Programs *)
+(* ----------------------------------------------------------------- *)
 
 (** Now we can write down what it means for the whole program 
     to be well-defined. *)
@@ -758,9 +770,11 @@ Definition program_has_type (cst : cptcontext) (mst : mdlcontext)
 
 (* ################################################################# *)
 (** ** Operational Semantics *)
+(* ################################################################# *)
 
 (* ================================================================= *)
 (** *** Values *)
+(* ================================================================= *)
 
 (** We start with defining the values of our language. *)
 
@@ -790,12 +804,14 @@ Hint Constructors value.
 
 (* ================================================================= *)
 (** *** Substitution *)
+(* ================================================================= *)
 
 (** Apparently, to evaluate terms of cpSTLCa we need not only usual
     terms substitution, but also models subsitution. *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Free Variables *)
+(* ----------------------------------------------------------------- *)
 
 (** To correctly apply substitution(s), we will need free variables. 
     Both normal and concept-parameters. *)
@@ -859,6 +875,7 @@ Fixpoint free_vars (t : tm) : id_set :=
 
 (* ----------------------------------------------------------------- *)
 (** **** Alpha Conversion ??? *)
+(* ----------------------------------------------------------------- *)
 
 (** We will only work with nicely defined terms, which satisfy
     Barendregt variable convention:
@@ -868,6 +885,7 @@ Fixpoint free_vars (t : tm) : id_set :=
 
 (* ----------------------------------------------------------------- *)
 (** **** Substitution Function *)
+(* ----------------------------------------------------------------- *)
 
 (** Note!
     As normal parameters and concept-parameters lie in the same Gamma,
@@ -1113,6 +1131,7 @@ Notation "'[#' c ':=' M ']' t" := (substc c M t) (at level 20) : stlca_scope.
 
 (* ================================================================= *)
 (** *** Reduction (Small-step operational semantics) *)
+(* ================================================================= *)
 
 (** What is the form of reduction relation in cpSTLCa? 
 
@@ -1315,6 +1334,9 @@ Notation "'[#' c ':=' M ']' t" := (substc c M t) (at level 20) : stlca_scope.
               CTbl * MTbl ; let x=v1 in t2 ==> [x:=v1] t2
 *)
 
+
+(** Here is a formal definition [step] of the 
+  * small-step reduction relation. *)
 
 Reserved Notation "CTbl '$' MTbl ';' t1 '#==>' t2" (at level 50).
 

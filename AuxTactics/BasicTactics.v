@@ -1,5 +1,5 @@
 (* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
-(* Last Update: Sat, 29 Oct 2016
+(* Last Update: Mon, 27 Mar 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -14,6 +14,23 @@ Require Import ConceptParams.AuxTactics.LibTactics.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
+
+(* ################################################################# *)
+(** ** Some FRAP Tactics (Adam Chlipala) *)
+
+Ltac equality := intuition congruence.
+
+Ltac propositional := intuition idtac.
+
+(* ----------------------------------------------------------------- *)
+(** **** Simplify *)
+
+Ltac simplify := 
+  repeat match goal with
+         | [ H : True |- _ ] => clear H
+         end;
+  repeat progress (simpl in *; intros; try autorewrite with core in *).
+
 
 (* ################################################################# *)
 (** ** Contradiction in Assumption *)

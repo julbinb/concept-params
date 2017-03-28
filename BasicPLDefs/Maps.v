@@ -2,7 +2,7 @@
 (* Mainly borrowed from Sofware Foundations, v.4 
    $Date: 2015-12-11 17:17:29 -0500 (Fri, 11 Dec 2015) $
 
-   Last Update: Wed, 25 Jan 2017
+   Last Update: Mon, 27 Mar 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -32,6 +32,7 @@ Require Import Coq.ZArith.ZArith.
 
 (* ################################################################# *)
 (** * Identifiers *)
+(* ################################################################# *)
 
 (** First, we need a type for the keys that we use to index into our
     maps. *)
@@ -46,6 +47,7 @@ Definition beq_id id1 id2 :=
 
 (* ----------------------------------------------------------------- *)
 (** *** Properties of Identifiers *)
+(* ----------------------------------------------------------------- *)
 
 Theorem beq_id_refl : forall id, true = beq_id id id.
 Proof.
@@ -82,6 +84,7 @@ Qed.
 
 (* ----------------------------------------------------------------- *)
 (** *** Reflecting Equality of Identifiers *)
+(* ----------------------------------------------------------------- *)
 
 (** It's convenient to use the reflection idioms.  
     We begin by proving a fundamental _reflection lemma_ relating 
@@ -99,6 +102,7 @@ Qed.
 
 (* ----------------------------------------------------------------- *)
 (** *** Propositional Equality of Identifiers *)
+(* ----------------------------------------------------------------- *)
 
 Definition eq_id x y : Prop :=
   match x, y with
@@ -128,6 +132,7 @@ Qed.
 
 (* ================================================================= *)
 (** ** Set of Identifiers *)
+(* ================================================================= *)
 
 Definition lt_id id1 id2 :=
   match id1,id2 with
@@ -142,6 +147,7 @@ Qed.
 
 (* ----------------------------------------------------------------- *)
 (** *** Identifiers as Ordered type *)
+(* ----------------------------------------------------------------- *)
 
 Module Id_as_OT <: OrderedType.
 
@@ -186,6 +192,7 @@ End Id_as_OT.
 
 (* ----------------------------------------------------------------- *)
 (** *** IdSet *)
+(* ----------------------------------------------------------------- *)
 
 (** Let's define a set of ids. *)
 
@@ -258,6 +265,7 @@ Hint Unfold set_from_list.
 
 (* ================================================================= *)
 (** ** Map of Identifiers *)
+(* ================================================================= *)
 
 Require Import Coq.FSets.FMaps.
 Require Import Coq.FSets.FMapFullAVL.
@@ -312,6 +320,7 @@ Definition map_from_list' {A : Type} (xs : list (id * A)) (m : id_map A) : id_ma
 
 (* ################################################################# *)
 (** * Total Maps *)
+(* ################################################################# *)
 
 (** We build partial maps in two steps.  First, we define a type of
     _total maps_ that return a default value when we look up a key
@@ -349,6 +358,7 @@ Definition t_from_list {A : Type} (xs : list (id * A)) (dv : A) : total_map A
 
 (* ----------------------------------------------------------------- *)
 (** ** Properties of Total Maps *)
+(* ----------------------------------------------------------------- *)
 
 (** First, the empty map returns its default element for all keys: *)
 Lemma t_apply_empty:  forall A x v, @t_empty A v x = v.
@@ -439,6 +449,7 @@ Qed.
 
 (* ################################################################# *)
 (** * Partial Maps *)
+(* ################################################################# *)
 
 (** Finally, we define _partial maps_ on top of total maps.  A partial
     map with elements of type [A] is simply a total map with elements
