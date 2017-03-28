@@ -6,7 +6,7 @@
    Properties of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 27 Mar 2017
+   Last Update: Tue, 28 Mar 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -1003,6 +1003,206 @@ Qed.
 
 (* ----------------------------------------------------------------- *)
 
+Lemma in_list__in_map_from_list' :
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty) (m : id_ty_map),
+    NoDup (map fst pnds) ->
+    List.In (nm, tp) pnds ->
+    IdMap.MapsTo nm tp (map_from_list' pnds m). 
+Proof.
+  intros pnds. induction pnds as [|pnd pnds' IHpnds'].
+  - (* pnds = nil *)
+    intros nm tp m Hdup Hin. simpl in *.
+    contradiction.
+  - (* pnds = pnd :: pnds' *)
+    intros nm tp m Hdup Hin. destruct pnd as [x v].
+    simpl.
+    inversion Hdup.
+    inversion Hin.
+    inversion H3. subst.
+      apply map_from_list'__ignore_list_add.
+      unfold not. intros contra.
+      tauto.
+    apply IHpnds'; tauto.
+Qed.
+
+Lemma in_list__in_map_from_list :
+  forall (pnds : list (id * ty)%type) (nm : id) (tp : ty),
+    NoDup (map fst pnds) ->
+    List.In (nm, tp) pnds ->
+    IdMap.MapsTo nm tp (map_from_list pnds). 
+Proof.
+  intros.
+  change (IdMap.MapsTo nm tp (map_from_list' pnds (mids_empty ty))).
+  apply in_list__in_map_from_list'; assumption.
+Qed.
+
+
+Lemma concept_welldefined__cons : 
+  forall cst Cnm nd nds,
+    concept_welldefined cst (cpt_def Cnm (nd :: nds)) ->
+    concept_welldefined cst (cpt_def Cnm nds).
+Proof.
+  intros cst Cnm nd nds H.
+  simpl in *.
+  destruct (namedecl_to_pair nd) as [nm tp].
+  destruct (split (map namedecl_to_pair nds)) as [fnames' ftypes'].
+  propositional.
+  inversion H0. assumption.
+  simpl in H1.  
+  inversion H1; propositional.
+Qed.
+
+Lemma list_elems_in_map__remove_unused :
+  forall nds f CT CT',
+    Forall
+      (fun nmdecl : namedecl =>
+         match nmdecl with
+         | nm_decl f T => find_ty f CT = Some T
+         end) nds ->
+    ~ In f (map fst (map namedecl_to_pair nds)) ->
+    CT' = IdMap.remove (elt:=ty) f CT ->
+    Forall
+      (fun nmdecl : namedecl =>
+         match nmdecl with
+         | nm_decl f0 T0 => find_ty f0 CT' = Some T0
+         end) nds.
+Proof.
+  intros nds. induction nds as [| nd nds' IHnds' ].
+  - (* nds = nil *)
+    intros f CT CT' Htypes Hin Heq.
+    constructor.
+  - (* nds = nd :: nds' *)
+    intros f CT CT' Htypes Hin Heq.
+    destruct nd as [nm tp]. simpl in *.
+    inversion Htypes; clear Htypes; subst.
+    apply Forall_cons.
+    + pose proof (eq_id_dec nm f).
+      inversion H.
+      { eapply or_introl in H0.
+        eapply Hin in H0. contradiction. }
+      clear H.
+      apply F.find_mapsto_iff.
+      apply F.remove_mapsto_iff.
+      split. equality.
+      apply F.find_mapsto_iff. assumption.
+    + apply IHnds' with (f := f) (CT := CT).
+      assumption.
+      unfold not. intros contra.
+      eapply or_intror in contra.
+      apply Hin in contra. contradiction.
+      reflexivity.
+Qed.
+
+Lemma nd_in_map__nd_in_list :
+  forall nds nm tp CT,
+    Forall
+      (fun nmdecl : namedecl =>
+         match nmdecl with
+         | nm_decl f T => find_ty f CT = Some T
+         end) 
+      nds ->
+    NoDup (map fst (map namedecl_to_pair nds)) ->
+    length nds = IdMap.cardinal (elt:=ty) CT ->
+    IdMap.MapsTo nm tp CT ->
+    List.In (nm_decl nm tp) nds.    
+Proof.
+  intros nds. induction nds as [| nd nds' IHnds' ].
+  - (* nds = nil *)
+    intros nm tp CT Htypes Hdup Hcard Hmaps. simpl in *.
+    symmetry in Hcard. apply cardinal_Empty in Hcard. 
+    unfold IdMap.Empty in *.
+    unfold IdMap.AvlProofs.Raw.Proofs.Empty in *.
+    apply Hcard in Hmaps; contradiction.
+  - (* nds = nd :: nds' *)
+    intros nm tp CT Htypes Hdup Hcard Hmaps.
+    inversion Htypes; subst; simpl in *. clear Htypes.
+    destruct nd as [f T].
+    simpl in Hdup. inversion Hdup. subst.
+    assert (Hfind := Hmaps).
+    rewrite (F.find_mapsto_iff CT nm tp) in Hfind.
+    unfold find_ty, mids_find in H1.
+    pose proof (eq_id_dec f nm).
+    inversion H; clear H.
+    + subst.
+      rewrite -> H1 in Hfind. inversion Hfind.
+      left; trivial.
+    + right.
+      (* To apply IH, we need smaller map *)
+      remember (IdMap.remove f CT) as CT'.
+      apply IHnds' with (CT := CT').
+      subst CT'.
+      apply list_elems_in_map__remove_unused with (f := f) (CT := CT); trivial.
+      assumption.
+      assert (Hnotin : ~ IdMap.In f CT').
+      { subst. intros contra.
+        apply F.remove_in_iff in contra.
+        inversion contra; tauto. }
+      assert (Hcard' : IdMap.cardinal (elt:=ty) CT 
+                       = S (IdMap.cardinal (elt:=ty) CT')).
+      { apply cardinal_2 with (x := f) (e := T).
+        assumption. unfold Add. subst.
+        intros y. 
+        pose proof (eq_id_dec f y) as Hyf. inversion Hyf.
+        subst.
+        rewrite H1. 
+        rewrite (F.add_eq_o _ _ (eq_refl y)). reflexivity.
+        rewrite (F.add_neq_o _ _ H).
+        symmetry. apply F.remove_neq_o. assumption. }
+      rewrite <- Hcard in Hcard'.
+      inversion Hcard'. reflexivity.
+      subst. apply F.remove_neq_mapsto_iff. assumption. assumption.
+Qed.      
+
+Lemma concept_has_type_iso : 
+  forall (cst : cptcontext) (C : conceptdef) (CT CT' : id_ty_map),  
+    concept_has_type cst C (CTdef CT) ->
+    concept_has_type cst C (CTdef CT') ->
+    IdMap.Equal CT CT'.
+Proof.
+  intros cst C. 
+  destruct C as [Cnm nmtps].
+  induction nmtps as [| nmtp nmtps' IHnmtps' ];
+    intros CT CT' HCT HCT';
+    unfold concept_has_type in *; propositional.
+  - (* nil *)
+    simpl in *. symmetry in H4, H5.
+    apply cardinal_Empty in H4. apply cardinal_Empty in H5.
+    unfold IdMap.Empty in *.
+    unfold IdMap.AvlProofs.Raw.Proofs.Empty in H4, H5.
+    apply F.Equal_mapsto_iff.
+    intros k e. split; intros contra.
+    + unfold IdMap.MapsTo in contra. apply H4 in contra. contradiction.
+    + unfold IdMap.MapsTo in contra. apply H5 in contra. contradiction.
+  - (* nmtps = nmtp :: nmtps' *)
+
+    unfold concept_welldefined in H.
+    destruct (split (map namedecl_to_pair (nmtp :: nmtps'))) 
+      as [fnames ftypes] eqn:Heq.
+    propositional.
+    apply split_fst__map_fst in Heq. subst.
+
+    apply F.Equal_mapsto_iff.
+    intros k e. split; intros Hmaps.
+    
+    assert (Hin : List.In (nm_decl k e) (nmtp :: nmtps')).
+    apply nd_in_map__nd_in_list with (CT := CT).
+    assumption. assumption. assumption. assumption.
+    rewrite Forall_forall in H0.
+    specialize (H0 (nm_decl k e) Hin).
+    inversion H0.
+    apply F.find_mapsto_iff. assumption.
+
+    assert (Hin : List.In (nm_decl k e) (nmtp :: nmtps')).
+    apply nd_in_map__nd_in_list with (CT := CT').
+    assumption. assumption. assumption. assumption.
+    rewrite Forall_forall in H3.
+    specialize (H3 (nm_decl k e) Hin).
+    inversion H3.
+    apply F.find_mapsto_iff. assumption.
+Qed.    
+
+(* ----------------------------------------------------------------- *)
+
 (** Here is the main [concept_type_check] soundness theorem. *)
 
 Theorem concept_type_check__sound : 
@@ -1107,7 +1307,57 @@ Forall_impl:
     tauto.
 Qed.
 
+(** Here is the main [concept_type_check] completeness theorem. *)
+
+Theorem concept_type_check__complete : 
+  forall (cst : cptcontext) (C : conceptdef) (CT CT' : id_ty_map),  
+    concept_has_type cst C (CTdef CT) ->
+    concept_type_check cst C = Some (CTdef CT') ->
+    IdMap.Equal CT CT'.
+Proof.
+  intros cst C CT CT' Hhas Hcheck.
+  apply concept_type_check__sound in Hcheck.
+  apply concept_has_type_iso with (cst := cst) (C := C);
+    assumption.
+(*
+  (* simplify [has] hypothesis *)
+  destruct C as [Cnm nds].
+  unfold concept_has_type in Hhas.
+  inversion Hhas as [Hwell Hbody]. clear Hhas.
+  inversion Hbody as [Htys Hlen]. clear Hbody.
+  (* simplify [check] hypothesis *)
+  unfold concept_type_check in Hcheck.
+  pose proof (concept_well_defined_b__complete _ _ Hwell) as Hwell'.
+  rewrite Hwell' in Hcheck.
+  inversion Hcheck as [Hcheck']. clear Hcheck. 
+  (* Main goal: map_from_list (map namedecl_to_pair nds) = nmtps *)
+
+  unfold concept_welldefined in Hwell.
+  destruct (split (map namedecl_to_pair nds)) as [fnames ftypes] eqn:Hnds.
+  assert (Hnds' := Hnds).
+  apply split_fst__map_fst in Hnds. subst.
+  inversion Hwell as [Hdup Htys'].
+
+  apply F.Equal_mapsto_iff.
+  intros k e.
+  repeat rewrite -> F.find_mapsto_iff.
+  split.
+  + intros H.
+    unfold concept_welldefined_b in Hwell'.
+    rewrite <- F.find_mapsto_iff.
+    apply in_list__in_map_from_list.
+    assumption.
+ *)   
+Qed.
+
 End IdMapProofs.
+
+
+(* ================================================================= *)
+(** *** Checking Terms *)
+(* ================================================================= *)
+
+
 
 (*
 Lemma mem_add_permute : forall (x y z : id) (s : id_set),
