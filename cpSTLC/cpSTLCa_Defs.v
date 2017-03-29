@@ -563,12 +563,12 @@ Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop :=
       Gamma x = Some (tmtype T) ->
       CTable $ MTable ; Gamma |- tvar x \in T
   | T_App   : forall CTable MTable Gamma t1 t2 T11 T12,
-      CTable $ MTable ; Gamma |- t1 \in T11 ->
-      CTable $ MTable ; Gamma |- t2 \in T12 ->                 
+      CTable $ MTable ; Gamma |- t1 \in (TArrow T11 T12) ->
+      CTable $ MTable ; Gamma |- t2 \in T11 ->                 
       CTable $ MTable ; Gamma |- tapp t1 t2 \in T12
   | T_Abs   : forall CTable MTable Gamma x t12 T11 T12,
       CTable $ MTable ; (update Gamma x (tmtype T11)) |- t12 \in T12 ->        
-      CTable $ MTable ; Gamma |- tabs x T11 t12 \in T12
+      CTable $ MTable ; Gamma |- tabs x T11 t12 \in (TArrow T11 T12)
   | T_MApp  : forall CTable MTable Gamma t1 M C Mbody T1,
       MTable M = Some (MTdef C Mbody) ->
       CTable $ MTable ; Gamma |- t1 \in TConceptPrm C T1 ->

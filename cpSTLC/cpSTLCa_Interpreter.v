@@ -224,16 +224,23 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
   | tcinvk c f =>
       (* if c:C \in Gamma, C:CT \in CTable, and f:TF \in CT,
          then c.f : TF *)
-      match context_get_concept CTable Gamma c with
-      | Some (CTdef Cbody) => find_ty f Cbody 
+      match Gamma c with
+      | Some (cpttype C) => 
+        match CTable C with
+        | Some (CTdef Cbody) => find_ty f Cbody 
+        | _ => None
+        end
+      (* c is not a name of concept parameter *)
+      | Some _ => None
       (* if M \notin dom(Gamma), M = ... of C ..., 
          C:CT \in CTable, and f:TF \in CT,
          then M.f : TF *)
       | None => match MTable c with
-                | Some (MTdef C Mbody) => match CTable C with
-                                          | Some (CTdef Cbody) => find_ty f Cbody 
-                                          | None => None
-                                          end
+                | Some (MTdef C Mbody) => 
+                  match CTable C with
+                  | Some (CTdef Cbody) => find_ty f Cbody 
+                  | None => None
+                  end
                 | None => None
                 end
       end

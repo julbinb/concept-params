@@ -56,11 +56,13 @@ Proof.
     rewrite -> IHT1. rewrite <- beq_id_refl. reflexivity.
 Qed.
 
-Lemma beq_ty__eq : forall T1 T2,
-    beq_ty T1 T2 = true -> T1 = T2.
+(* beq_ty__eq *)
+
+Lemma beq_ty_true_iff : forall T1 T2,
+    beq_ty T1 T2 = true <-> T1 = T2.
 Proof.
   intros T1. induction T1;
-  (intros T2; induction T2; intros H);
+  (intros T2; induction T2; split; intros H);
     (* in some cases it's just reflexivity *)
     try reflexivity;
     (* in other cases we have impossible equalities as assumptions 
@@ -71,12 +73,21 @@ Proof.
     inversion H as [H1 H2].
     apply IHT1_1 in H1. apply IHT1_2 in H2.
     subst. reflexivity.
+  - (* T1_1 -> T1_2 = T2_1 -> T2_2 *)
+    inversion H. subst. 
+    simpl. apply andb_true_iff.
+    split. rewrite (IHT1_1 T2_1); auto. rewrite (IHT1_2 T2_2); auto.
   - (* C1 # T1 = C2 # T2 *)
     simpl in H. apply andb_true_iff in H.
     inversion H as [HC HT].
     rewrite -> beq_id_true_iff in HC. subst.
     apply IHT1 in HT. subst.
     reflexivity.
+  - (* C1 # T1 = C2 # T2 *)
+    inversion H. subst.
+    simpl. apply andb_true_iff.
+    split. symmetry. apply beq_id_refl.
+    apply beq_ty_refl.
 Qed.  
 
 Lemma beq_tyP : forall T1 T2, reflect (T1 = T2) (beq_ty T1 T2).
@@ -97,7 +108,7 @@ Proof.
       rename i0 into C. simpl. apply andb_true_iff. split.
       symmetry. apply beq_id_refl. apply beq_ty_refl. 
   - (* beq_ty T1 T2 = true -> T1 = T2 *)
-    apply beq_ty__eq.
+    apply beq_ty_true_iff.
 Qed.
 
 (** Decidability of types' equivalence *)
@@ -1354,8 +1365,83 @@ End IdMapProofs.
 
 
 (* ================================================================= *)
-(** *** Checking Terms *)
+(** *** Checking Types *)
 (* ================================================================= *)
+
+Theorem type_check__sound :
+  forall (cst : cptcontext) (mst : mdlcontext)
+         (Gamma : context) (t : tm) (T : ty),
+    type_check cst mst Gamma t = Some T ->
+    has_type cst mst Gamma t T.
+Proof.
+  intros cst mst Gamma t.
+  generalize dependent Gamma.
+  generalize dependent mst. generalize dependent cst. 
+  (* Induction on term t *)
+  induction t; intros cst mst Gamma T H; 
+    simpl in *;
+    unfold context_get_type, option_handle, 
+      context_get_concept in *;
+    repeat 
+      match goal with
+      | [H : context[match ?x with _ => _ end] |- _] => cases x; subst; simpl
+      | [H : ?C _ = ?C _ |- _] => inversion H; subst; clear H; auto
+      | [H : beq_ty _ _ = true |- _] => apply beq_ty_true_iff in H; subst
+      | [H : beq_id _ _ = true |- _] => apply beq_id_true_iff in H; subst
+      end;
+    try solve_by_invert;
+    repeat 
+      match goal with
+      | [IH : context[type_check _ _ _ ?t = Some _ -> _],
+              H : type_check _ _ _ ?t = Some _
+         |- has_type _ _ _ _ _ ] => specialize (IH _ _ _ _ H)
+      end.
+  (* App *)
+  econstructor; eassumption.
+  (*eapply T_App; eassumption.*)
+  (* MApp *)
+  econstructor; eassumption.
+  (* CAbs *)
+  destruct c as [Cbody].
+  apply T_CAbs with (Cbody := Cbody). assumption.
+  assumption.
+  (* CInvk for c#C *)
+  apply T_CInvk with (C := i1). eassumption.
+  unfold concept_fun_member. rewrite Eq0. assumption.
+  (* CInvk for M *)
+  apply T_MInvk with (C := i1) (Mbody := i2).
+  assumption. assumption.
+  unfold concept_fun_member. rewrite Eq1. assumption.
+  (* tif *)
+  constructor; assumption.
+  (* tlet *)
+  econstructor; eassumption.
+Qed.
+
+
+Theorem type_check__complete :
+  forall (cst : cptcontext) (mst : mdlcontext)
+         (Gamma : context) (t : tm) (T : ty),
+    has_type cst mst Gamma t T ->
+    type_check cst mst Gamma t = Some T.
+Proof.
+  intros cst mst Gamma t T Hty.
+  induction Hty; simpl;
+    unfold context_get_type, option_handle, concept_fun_member in *;
+    repeat 
+      match goal with
+      | [H : ?x = _ |- context[?x] ] => rewrite H; try trivial
+(*           |[H : _ = ?x |- context[?x] ] => rewrite <- H; try auto  *)
+      | [ |- context[beq_ty ?x ?x]] => 
+        rewrite beq_ty_refl; simpl; try equality
+      | [ |- context[beq_id ?x ?x]] => 
+        rewrite <- beq_id_refl; simpl; try equality
+      | [H : context[match ?x with _ => _ end] |- _] => 
+        cases x; subst; simpl                
+      end;
+    tauto.
+Qed.
+
 
 
 

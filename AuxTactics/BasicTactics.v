@@ -31,6 +31,45 @@ Ltac simplify :=
          end;
   repeat progress (simpl in *; intros; try autorewrite with core in *).
 
+(* ----------------------------------------------------------------- *)
+(** **** cases *)
+
+Ltac cases E :=
+  ((is_var E; destruct E)
+   || match type of E with
+      | {_} + {_} => destruct E
+      | _ => let Heq := fresh "Heq" in destruct E eqn:Heq
+      end);
+  repeat match goal with
+         | [ H : _ = left _ |- _ ] => clear H
+         | [ H : _ = right _ |- _ ] => clear H
+         end.
+
+(* ----------------------------------------------------------------- *)
+(** **** invert *)
+
+Ltac invert' H := inversion H; clear H; subst.
+
+Ltac invertN n :=
+  match goal with
+    | [ |- forall x : ?E, _ ] =>
+      match type of E with
+        | Prop =>
+          let H := fresh in intro H;
+            match n with
+              | 1 => invert' H
+              | S ?n' => invertN n'
+            end
+        | _ => intro; invertN n
+      end
+  end.
+
+Ltac invert e := invertN e || invert' e.
+
+Ltac invert0 e := invert e; fail.
+Ltac invert1 e := invert0 e || (invert e; []).
+Ltac invert2 e := invert1 e || (invert e; [|]).
+
 
 (* ################################################################# *)
 (** ** Contradiction in Assumption *)
