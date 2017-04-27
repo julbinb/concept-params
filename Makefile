@@ -103,6 +103,7 @@ VFILES:=BasicPLDefs/Identifier.v\
   AuxTactics/LibTactics.v\
   AuxTactics/BasicTactics.v\
   ListAsAVL/ListAsSet.v\
+  ListAsAVL/ListPairAsMap.v\
   cpSTLC/cpSTLCa_Defs.v\
   cpSTLC/cpSTLCa_Interpreter.v\
   cpSTLC/cpSTLCa_Examples.v\

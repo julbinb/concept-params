@@ -97,7 +97,7 @@ Module MListAsSet
   Definition id_set := IdSet.t.
   Hint Unfold id_set. 
 
-  Module Helper.
+  Module HelperFuns.
     (** Aux recursive function for ids_are_unique. *)
     Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
       match nmlist with
@@ -106,11 +106,11 @@ Module MListAsSet
                      then false
                      else ids_are_unique_recur nms (IdSet.add nm nmset)
       end.
-  End Helper.
+  End HelperFuns.
 
   (** [ids_are_unique] checks if all ids in a list are unique. *)
   Definition ids_are_unique (names : list id) : bool :=
-    Helper.ids_are_unique_recur names IdSet.empty.
+    HelperFuns.ids_are_unique_recur names IdSet.empty.
 
   (** [set_from_list] builds a set of ids from a list of ids. *)
   Definition set_from_list (xs : list id) : id_set
@@ -131,7 +131,7 @@ Module MListAsSet
     Import IdSet.
     Import IdSetFacts.
     Import IdSetProps.
-    Import Helper.
+    Import HelperFuns.
 
     Module Helper.
 
