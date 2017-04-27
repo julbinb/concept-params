@@ -16,11 +16,14 @@
 
 Add LoadPath "../..".
 
+Require Import ConceptParams.BasicPLDefs.Identifier.
 Require Import ConceptParams.BasicPLDefs.Maps.
 Require Import ConceptParams.BasicPLDefs.Relations.
 
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
+
+Require Import ConceptParams.ListAsAVL.ListAsSet.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 Require Import ConceptParams.cpSTLC.cpSTLCa_Interpreter.
@@ -305,6 +308,7 @@ End TestConcepts1.
 (* Tests / ------------------------------- *)
 Module TestIdsUniqueness1.
   Import Examples.
+  Import IdLS.
   
   Example test_ids_1 : ids_are_unique [vx; vy; vz] = true.
   Proof.

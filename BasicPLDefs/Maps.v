@@ -11,13 +11,21 @@
 (* ***************************************************************** *)
 (* ***************************************************************** *)
 
+Require Import Identifier.
+
 Require Import Coq.Arith.Arith.
 Require Import Coq.Bool.Bool.
 
 Require Import Coq.Logic.FunctionalExtensionality.
+(* for t_update proof *)
 
-Require Import Coq.Structures.OrderedType.
-Require Import Coq.ZArith.ZArith.
+(*Require Import Coq.Structures.OrderedType.
+Require Import Coq.Structures.Orders.
+Require Import Coq.Structures.OrdersAlt.
+Require Import Coq.Structures.Equalities.
+Require Import Coq.ZArith.ZArith.*)
+
+Require Import Coq.MSets.MSets.
 
 (** Maps (or dictionaries) are ubiquitous data structures, both in
     software construction generally and in the theory of programming
@@ -30,179 +38,18 @@ Require Import Coq.ZArith.ZArith.
     the former, using [None] as the default element. *)
 
 
-(* ################################################################# *)
-(** * Identifiers *)
-(* ################################################################# *)
-
-(** First, we need a type for the keys that we use to index into our
-    maps. *)
-
-Inductive id : Type :=
-  | Id : nat -> id.
-
-Definition beq_id id1 id2 :=
-  match id1,id2 with
-    | Id n1, Id n2 => beq_nat n1 n2
-  end.
-
-(* ----------------------------------------------------------------- *)
-(** *** Properties of Identifiers *)
-(* ----------------------------------------------------------------- *)
-
-Theorem beq_id_refl : forall id, true = beq_id id id.
-Proof.
-  intros [n]. simpl. rewrite <- beq_nat_refl.
-  reflexivity.
-Qed.
-
-Theorem beq_id_true_iff : forall id1 id2 : id,
-  beq_id id1 id2 = true <-> id1 = id2.
-Proof.
-   intros [n1] [n2].
-   unfold beq_id. 
-   rewrite beq_nat_true_iff.
-   split.
-   - (* -> *) intros H. rewrite H. reflexivity.
-   - (* <- *) intros H. inversion H. reflexivity.
-Qed.
-
-Theorem beq_id_false_iff : forall x y : id,
-  beq_id x y = false
-  <-> x <> y.
-Proof.
-  intros x y. rewrite <- beq_id_true_iff.
-  rewrite not_true_iff_false. reflexivity.
-Qed.
-
-Theorem false_beq_id : forall x y : id,
-   x <> y
-   -> beq_id x y = false.
-Proof.
-  intros x y. rewrite beq_id_false_iff.
-  intros H. apply H.
-Qed.
-
-(* ----------------------------------------------------------------- *)
-(** *** Reflecting Equality of Identifiers *)
-(* ----------------------------------------------------------------- *)
-
-(** It's convenient to use the reflection idioms.  
-    We begin by proving a fundamental _reflection lemma_ relating 
-    the equality proposition on [id]s 
-    with the boolean function [beq_id]. *)
-
-(** Use the proof of [beq_natP] in chapter [IndProp] as a template to
-    prove the following: *)
-
-Lemma beq_idP : forall x y, reflect (x = y) (beq_id x y).
-Proof.
-  intros x y. 
-  apply iff_reflect. symmetry. apply beq_id_true_iff.
-Qed.
-
-(* ----------------------------------------------------------------- *)
-(** *** Propositional Equality of Identifiers *)
-(* ----------------------------------------------------------------- *)
-
-Definition eq_id x y : Prop :=
-  match x, y with
-    Id n, Id m => eq_nat n m
-  end.
-
-Lemma eq_id_iff_eq_nat : forall n m,
-    eq_id (Id n) (Id m) <-> eq_nat n m.
-Proof.
-  tauto.
-Qed. 
-
-Theorem eq_id_decide : forall x y, {eq_id x y} + {~ eq_id x y}.
-Proof.
-  intros [n] [m]. simpl.
-  apply eq_nat_decide.
-Qed.
-
-Theorem eq_id_dec : forall (x y : id), {x = y} + {x <> y}.
-Proof.
-  intros [x] [y]. destruct (eq_nat_dec x y) as [H|H].
-  - subst. left. reflexivity.
-  - right. intros contra. inversion contra as [contra'].
-    apply H in contra'. assumption.
-Qed.
-
-
 (* ================================================================= *)
 (** ** Set of Identifiers *)
 (* ================================================================= *)
-
-Definition lt_id id1 id2 :=
-  match id1,id2 with
-    | Id n1, Id n2 => lt n1 n2
-  end.
-
-Lemma lt_id_iff_lt_nat : forall n m,
-    lt_id (Id n) (Id m) <-> lt n m.
-Proof.
-  tauto.
-Qed.  
-
-(* ----------------------------------------------------------------- *)
-(** *** Identifiers as Ordered type *)
-(* ----------------------------------------------------------------- *)
-
-Module Id_as_OT <: OrderedType.
-
-  Definition t := id.
-
-  Definition eq := @eq id.
-  Definition eq_refl := @eq_refl t.
-  Definition eq_sym := @eq_sym t.
-  Definition eq_trans := @eq_trans t.
-
-  Definition lt := lt_id.
-
-  Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
-  Proof.
-    intros [x] [y] [z]. unfold lt, lt_id.
-    apply Nat.lt_trans.
-  Qed.  
-
-  Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
-  Proof.
-    intros [x] [y]. unfold lt, lt_id. unfold eq.
-    intros Hlt Contra. inversion Contra as [Contra'].
-    apply Nat.lt_neq in Hlt. apply Hlt in Contra'.
-    apply Contra'.
-  Qed.
-  
-  Definition compare : forall x y : t, Compare lt eq x y.
-  Proof.
-    intros [x] [y]. destruct (nat_compare x y) as [ | | ] eqn:H.
-    - (* EQ *) apply EQ. apply nat_compare_eq in H; subst. 
-               reflexivity.
-    - (* LT *) apply LT. apply nat_compare_Lt_lt in H.
-               rewrite <- lt_id_iff_lt_nat in H. assumption.
-    - (* GT *) apply GT. apply nat_compare_Gt_gt in H.
-               unfold gt in H.
-               rewrite <- lt_id_iff_lt_nat in H. assumption.
-  Defined. 
-
-  Definition eq_dec := eq_id_dec.
-
-End Id_as_OT.
 
 (* ----------------------------------------------------------------- *)
 (** *** IdSet *)
 (* ----------------------------------------------------------------- *)
 
-(** Let's define a set of ids. *)
-
-(* JB | I am not sure why is this needed. Probably, because of the
-        switch from FSets to MSets *)
-Require Import Coq.MSets.MSets.
-Module Id_as_OT' := (Coq.Structures.OrdersAlt.Update_OT Id_as_OT).
+(** Let's define a set of ids first. *)
 
 (* Module for a set of ids *)
-Module IdSet := MSetAVL.Make Id_as_OT'.
+Module IdSet := MSetAVL.Make Id_as_OT_old.
 
 (*Module IdSetExamples.
   
@@ -263,6 +110,7 @@ Definition set_from_list (xs : list id) : id_set
        xs ids_empty.
 Hint Unfold set_from_list.
 
+
 (* ================================================================= *)
 (** ** Map of Identifiers *)
 (* ================================================================= *)
@@ -273,7 +121,7 @@ Require Export Coq.FSets.FMapFacts.
 
 
 (** Map from [id] to arbitrary elements *)
-Module IdMap := FMapFullAVL.Make Id_as_OT.
+Module IdMap := FMapFullAVL.Make IdOTOrig.
 
 (** Type of the map [id -> ?X] *)
 

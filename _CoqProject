@@ -4,6 +4,8 @@
 
 -R . "ConceptParams"
 
+./BasicPLDefs/Identifier.v
+
 ./BasicPLDefs/Maps.v
 ./BasicPLDefs/Relations.v
 
@@ -11,6 +13,8 @@
 
 ./AuxTactics/LibTactics.v
 ./AuxTactics/BasicTactics.v
+
+./ListAsAVL/ListAsSet.v
 
 ./cpSTLC/cpSTLCa_Defs.v
 ./cpSTLC/cpSTLCa_Interpreter.v

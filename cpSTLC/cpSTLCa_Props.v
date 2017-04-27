@@ -21,6 +21,7 @@
 
 Add LoadPath "../..".
 
+Require Import ConceptParams.BasicPLDefs.Identifier.
 Require Import ConceptParams.BasicPLDefs.Maps.
 Require Import ConceptParams.BasicPLDefs.Relations.
 
@@ -28,6 +29,8 @@ Require Import ConceptParams.BasicPLDefs.Utils.
 
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
+
+Require Import ConceptParams.ListAsAVL.ListAsSet.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 Require Import ConceptParams.cpSTLC.cpSTLCa_Interpreter.
@@ -132,18 +135,33 @@ Qed.
 (** **** Checking Ids' Uniqueness *)
 (* ----------------------------------------------------------------- *)
 
+Theorem ids_are_unique__sound : forall (l : list id),
+    IdLS.ids_are_unique l = true -> NoDup l.
+Proof.
+  apply IdLS.Props.ids_are_unique__sound.
+Qed.
+
+Theorem ids_are_unique__complete : forall (l : list id),
+    NoDup l -> IdLS.ids_are_unique l = true.
+Proof.
+  apply IdLS.Props.ids_are_unique__complete.
+Qed.
+
 (** First of all we want to prove that [ids_are_unique] is sound, 
     i.e. if it returns true, than there is no duplicates in the list.    
 
     A bunch of auxiliary lemmas is needed to prove the main theorem.  
 *)
 
+Section IdSetProofs.
+
+(*
 (* We need some facts from sets... *)
 
 Module IdSetFacts := MSetFacts.WFacts IdSet.
 Module IdSetProps := MSetProperties.WProperties IdSet.
 
-Section IdSetProofs.
+
 
 Import IdSet.
 Import IdSetFacts.
@@ -470,6 +488,7 @@ Proof.
     + assumption.
     + reflexivity.
 Qed.
+*)
 
 (* ----------------------------------------------------------------- *)
 (** **** Types Validity *)
@@ -1468,3 +1487,26 @@ Definition id_list_to_id_set (l : list id) :=
   fold_left (fun acc x => ids_add x acc) l ids_empty.
 
 *)
+
+
+(* ################################################################# *)
+(** ** Soundness *)
+(* ################################################################# *)
+
+(*
+MultiStep.
+
+Lemma test : forall (t t' : tm),
+    t #==>* t'.
+
+
+Lemma test : forall (t t' : tm),
+    step_fixed t t'.
+
+
+Theorem progress : forall t T,
+     empty |- t \in T ->
+     value t \/ exists t', t ==> t'.
+*)
+
+

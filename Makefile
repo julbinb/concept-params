@@ -96,11 +96,13 @@ endif
 #                    #
 ######################
 
-VFILES:=BasicPLDefs/Maps.v\
+VFILES:=BasicPLDefs/Identifier.v\
+  BasicPLDefs/Maps.v\
   BasicPLDefs/Relations.v\
   BasicPLDefs/Utils.v\
   AuxTactics/LibTactics.v\
   AuxTactics/BasicTactics.v\
+  ListAsAVL/ListAsSet.v\
   cpSTLC/cpSTLCa_Defs.v\
   cpSTLC/cpSTLCa_Interpreter.v\
   cpSTLC/cpSTLCa_Examples.v\

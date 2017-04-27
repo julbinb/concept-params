@@ -20,6 +20,7 @@
 
 Add LoadPath "../..".
 
+Require Import ConceptParams.BasicPLDefs.Identifier.
 Require Import ConceptParams.BasicPLDefs.Maps.
 Require Import ConceptParams.BasicPLDefs.Relations.
 
@@ -1453,8 +1454,34 @@ Inductive step (CTbl : cptcontext) (MTbl : mdlcontext) : tm -> tm -> Prop :=
 
 where "CTbl '$' MTbl ';' t1 '#==>' t2" := (step CTbl MTbl t1 t2) : stlca_scope.
 
-(*Notation multistep := (multi step).
-Notation "t1 '==>*' t2" := (multistep t1 t2) (at level 40).
-*)
-
 Hint Constructors step.
+
+
+Section MultiStep.
+
+Parameter CTable : cptcontext.
+Parameter MTable : mdlcontext.
+
+Definition step_fixed : tm -> tm -> Prop := step CTable MTable.
+
+Notation multistep := (multi step_fixed).
+Notation "t1 '#==>*' t2" := (multistep t1 t2) (at level 40) : cpstlca_scope.
+
+Open Scope cpstlca_scope. 
+
+Lemma test' : forall (t t' : tm),
+    t #==>* t'.
+Proof.
+Abort.
+
+End MultiStep.
+
+
+(*
+Open Scope cpstlca_scope. 
+
+
+Lemma test' : forall (t t' : tm),
+    t #==>* t'.
+
+*)

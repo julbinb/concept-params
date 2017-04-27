@@ -20,6 +20,7 @@
 
 Add LoadPath "../..".
 
+Require Import ConceptParams.BasicPLDefs.Identifier.
 Require Import ConceptParams.BasicPLDefs.Maps.
 Require Import ConceptParams.BasicPLDefs.Relations.
 
@@ -27,6 +28,8 @@ Require Import ConceptParams.BasicPLDefs.Utils.
 
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
+
+Require Import ConceptParams.ListAsAVL.ListAsSet.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 
@@ -36,6 +39,8 @@ Require Import Coq.Bool.Bool.
 
 Require Import Coq.omega.Omega.
 
+
+Module IdLS := MListAsSet IdUOT.
 
 (* ################################################################# *)
 (** ** Syntax *)
@@ -109,7 +114,7 @@ Definition types_valid_b (st : cptcontext) (ts : list ty) : bool :=
 *)
 
 (** Let's write a function [ids_are_unique] to check name repetitions. *)
-
+(*
 Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
   match nmlist with
   | nil => true
@@ -120,7 +125,7 @@ Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
 
 Definition ids_are_unique (names : list id) : bool :=
   ids_are_unique_recur names ids_empty.
-
+*)
 (** And define a function to check that "concept is well defined" *)
 
 Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
@@ -129,7 +134,7 @@ Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
     let (fnames, ftypes) := split (map namedecl_to_pair cbody) in
     andb
       (** all names are distinct *)
-      (ids_are_unique fnames)
+      (IdLS.ids_are_unique fnames)
       (** and all types are valid *)
       (types_valid_b st ftypes)           
   end.
