@@ -1,18 +1,13 @@
 (* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
-(* Correspondence of
-
-   List of unique elements
-     and
-   Set of elements   
+(* Transformation of
+     List of (unique) Elements
+   into
+     Set of Elements (AVL-based)   
   
    Last Update: Tue, 25 Apr 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 Add LoadPath "../..".
-
-Require Import ConceptParams.BasicPLDefs.Relations.
-
-Require Import ConceptParams.BasicPLDefs.Utils.
 
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
@@ -25,23 +20,31 @@ Require Import Coq.Structures.Orders.
 Require Import Coq.MSets.MSets.
 
 (* ***************************************************************** *)
-(** * List as Set *)
+(** * List-to-Set 
 
-(** Module with definitions and properties of functions
- ** that treat lists as sets.  
+      ([AVL-Set] based transformations of [List]) *)
+
+(** This module provides: 
+ **   1) functions for analysis and transformation of [List] 
+ **      into [AVL-Set];
+ **   2) properties of these functions;
+ **   3) proofs of the properties.  
  ** *)
 (* ***************************************************************** *)
 (* ***************************************************************** *)
 
 (* ################################################################# *)
-(** ** Module Type [ListAsSet] *)
+(** ** Module Type [List2Set] *)
 (* ################################################################# *)
 
-(** [ListAsSet] takes [UsualOrderedType] module for type of "identifiers"  *)
+(** [List2Set] functor takes [id_UOT : UsualOrderedType] module, 
+ ** which provides ordering for type [id_UOT.t] of "identifiers". *)
 
-Module Type ListAsSet (id_OT : UsualOrderedType).
+Module Type List2Set (id_UOT : UsualOrderedType).
 
-  Module IdOT := id_OT.
+  (** Ordering of ids *)
+  Module IdOT := id_UOT.
+  (** AVL Set of ids *)
   Module IdSet := MSetAVL.Make IdOT.
 
   (** Type of Identifiers *)
@@ -50,13 +53,13 @@ Module Type ListAsSet (id_OT : UsualOrderedType).
   (** Type of Set-of-Identifiers *)
   Definition id_set := IdSet.t.
 
-  (** [ids_are_unique] checks if all ids in a list are unique. *)
+  (** [ids_are_unique] checks if all ids in the list are unique *)
   Parameter ids_are_unique : list id -> bool.
-  Transparent ids_are_unique.
 
-  (** [set_from_list] builds a set of ids from a list of ids. *)
+  (** [set_from_list] builds a set of ids from the list of ids *)
   Parameter set_from_list : list id -> id_set.
 
+  (** Properties of the module functions *)
   Module Props.
     Axiom ids_are_unique__sound : forall (l : list id),
       ids_are_unique l = true -> NoDup l.
@@ -65,40 +68,41 @@ Module Type ListAsSet (id_OT : UsualOrderedType).
         NoDup l -> ids_are_unique l = true.
   End Props.
 
-End ListAsSet.
+End List2Set.
 
 
 (* ################################################################# *)
-(** ** Module for *)
+(** ** Module [MList2Set] *)
 (* ################################################################# *)
 
-(*
-Module MSetAVLFromUOT (OT : UsualOrderedType) := 
-  MSetAVL.Make (Coq.Structures.OrdersAlt.Update_OT OT).
-*)
+(** [MList2Set] functor takes [id_UOT : UsualOrderedType] module, 
+ ** which provides ordering for type [id_UOT.t] of "identifiers",
+ ** and returns a module with 
+ ** functions for [AVL-Set] based transformation of [List],
+ ** together with their properties (proved). *)
 
-Module MListAsSet
-       (id_OT : UsualOrderedType) 
-<: ListAsSet id_OT.
+Module MList2SetAVL
+       (id_UOT : UsualOrderedType) 
+<: List2Set id_UOT.
 
-  Module IdOT := id_OT.
+  (** Ordering of ids *)
+  Module IdOT := id_UOT.
+  (** AVL Set of ids *)
   Module IdSet := MSetAVL.Make IdOT.
 
   (** Type of Identificators *)
   Definition id : Type := IdOT.t.
 
-(* ================================================================= *)
-(** *** Set of Identifiers *)
-(* ================================================================= *)
-
-(** Let's define a set of ids. *)
-
-  (** Type of the set *)
+  (** Type of Set-of-Identifiers *)
   Definition id_set := IdSet.t.
-  Hint Unfold id_set. 
+
+(* ================================================================= *)
+(** *** Helper Functions *)
+(* ================================================================= *)
 
   Module HelperFuns.
-    (** Aux recursive function for ids_are_unique. *)
+
+    (** Aux recursive function for [ids_are_unique] *)
     Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
       match nmlist with
       | nil => true
@@ -106,21 +110,26 @@ Module MListAsSet
                      then false
                      else ids_are_unique_recur nms (IdSet.add nm nmset)
       end.
+
   End HelperFuns.
 
-  (** [ids_are_unique] checks if all ids in a list are unique. *)
+(* ================================================================= *)
+(** *** Main Functions *)
+(* ================================================================= *)
+
+  (** [ids_are_unique] checks if all ids in the list are unique *)
   Definition ids_are_unique (names : list id) : bool :=
     HelperFuns.ids_are_unique_recur names IdSet.empty.
 
-  (** [set_from_list] builds a set of ids from a list of ids. *)
+  (** [set_from_list] builds a set of ids from the list of ids *)
   Definition set_from_list (xs : list id) : id_set
     := fold_left
          (fun s x => IdSet.add x s)
          xs IdSet.empty.
 
-  (* ================================================================= *)
-  (** *** Properties *)
-  (* ================================================================= *)
+(* ================================================================= *)
+(** *** Properties *)
+(* ================================================================= *)
 
   Module Props.
 
@@ -137,6 +146,7 @@ Module MListAsSet
 
     (* ----------------------------------------------------------------- *)
     (** *** Simple aux facts about sets *)
+    (* ----------------------------------------------------------------- *)
 
     Lemma not_IdOT_eq__sym : forall x y,
         ~ IdOT.eq x y ->
@@ -197,6 +207,7 @@ Module MListAsSet
 
     (* ----------------------------------------------------------------- *)
     (** *** Aux facts about [ids_are_unique*] for soundness *)
+    (* ----------------------------------------------------------------- *)
 
     Lemma ids_are_unique_recur__eq_sets_eq : forall (l : list id) (s s' : id_set),
         IdSet.Equal s s' ->
@@ -318,6 +329,7 @@ Module MListAsSet
 
     (* ----------------------------------------------------------------- *)
     (** *** Aux facts about [ids_are_unique*] for completeness *)
+    (* ----------------------------------------------------------------- *)
 
     Lemma not_in_list_cons : forall (l : list id) (h : id) (x : id),
         ~ List.In x (h :: l) ->
@@ -402,7 +414,9 @@ Module MListAsSet
 
     End Helper.
 
-    (* ----------------------------------------------------------------- *)
+(* ================================================================= *)
+(** *** Main Properties *)
+(* ================================================================= *)
 
     (** Here is the main [ids_are_unique] soundness theorem: *)
 
@@ -440,5 +454,5 @@ Module MListAsSet
 
   End Props.
 
-End MListAsSet.
+End MList2SetAVL.
 
