@@ -31,6 +31,8 @@ Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 
+Require Import ConceptParams.GenericModuleLib.Concept1.
+
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
@@ -97,6 +99,37 @@ Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
   | TArrow t1 t2     => andb (type_valid_b st t1)  (type_valid_b st t2)
   | TConceptPrm c t1 => andb (concept_defined_b st c) (type_valid_b st t1)
   end.
+
+
+
+
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+Module ty_TypOkInterp <: TypOkInterp ty_Typ.
+  Definition is_ok_b := type_valid_b.
+End ty_TypOkInterp.
+
+Module cpt1Interp := MConcept1Interp ty_Concept1Base ty_TypOkInterp.
+
+Definition types_valid_b' (st : cptcontext) (ts : list ty) : bool :=
+  cpt1Interp.types_ok_b st ts.
+
+Definition concept_welldefined_b' (st : cptcontext) (C : conceptdef) : bool :=
+  match C with
+    cpt_def cname cbody =>
+    let pnds := map namedecl_to_pair cbody in
+    cpt1Interp.concept_ok_b st pnds
+  end.
+
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+
+
+
+
+
 
 (** We can also write a function [types_are_valid] to check that 
     all types in a list are valid.

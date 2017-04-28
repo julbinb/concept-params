@@ -33,6 +33,8 @@ Require Import ConceptParams.AuxTactics.BasicTactics.
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 Require Import ConceptParams.cpSTLC.cpSTLCa_Interpreter.
 
+Require Import ConceptParams.GenericModuleLib.Concept1.
+
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
@@ -240,6 +242,60 @@ Proof.
     + apply type_valid_b__complete. assumption.
     + apply IHts'. assumption.
 Qed.
+
+
+
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+Module ty_TypOkProp <: TypOkProp ty_Typ ty_TypOkDef ty_TypOkInterp.
+  Definition is_ok_b__sound := type_valid_b__sound.
+  Definition is_ok_b__complete := type_valid_b__complete.
+End ty_TypOkProp.
+
+Module cpt1Props := MConcept1Props ty_Concept1Base 
+                                   ty_TypOkDef ty_TypOkInterp ty_TypOkProp.
+
+Lemma types_valid_b__sound' : forall (cst : cptcontext) (ts : list ty),
+    types_valid_b' cst ts = true ->
+    types_valid' cst ts.
+Proof.
+  apply cpt1Props.types_ok_b__sound.
+Qed.
+
+Lemma types_valid_b__complete' : forall (cst : cptcontext) (ts : list ty),
+    types_valid'   cst ts ->
+    types_valid_b' cst ts = true.
+Proof.
+  apply cpt1Props.types_ok_b__complete.
+Qed.
+
+Theorem concept_well_defined_b__sound' : forall (cst : cptcontext) (C : conceptdef),
+    concept_welldefined_b' cst C = true ->
+    concept_welldefined'   cst C.
+Proof.
+  intros cst C. intros H.
+  destruct C as [nm body]. simpl in *. 
+  apply cpt1Props.concept_ok_b__sound. assumption.
+Qed.
+
+Theorem concept_well_defined_b__complete' : forall (cst : cptcontext) (C : conceptdef),
+    concept_welldefined'   cst C ->
+    concept_welldefined_b' cst C = true.
+Proof.
+  intros cst C. intros H.
+  destruct C as [nm body]. simpl in *.
+  apply cpt1Props.concept_ok_b__complete. assumption.
+Qed.
+
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+
+
+
+
+
 
 (* ----------------------------------------------------------------- *)
 (** **** Concept Well-definedness *)

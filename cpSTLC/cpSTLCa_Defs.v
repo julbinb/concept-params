@@ -32,6 +32,8 @@ Require Import ConceptParams.AuxTactics.BasicTactics.
 Require Import ConceptParams.List2AVL.List2Set.
 Require Import ConceptParams.List2AVL.ListPair2Map.
 
+Require Import ConceptParams.GenericModuleLib.Concept1.
+
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
@@ -376,6 +378,47 @@ Inductive type_valid (st : cptcontext) : ty -> Prop :=
 .
 
 Hint Constructors type_valid. 
+
+
+
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+Module ty_Typ <: Typ.
+  Definition t := ty.
+  Definition ctx := cptcontext.
+End ty_Typ.
+ 
+Module ty_TypOkDef <: TypOkDef ty_Typ.
+  Definition is_ok := type_valid.
+End ty_TypOkDef.
+
+Module ty_Concept1Base <: Concept1Base.
+  Module IdOT := IdLS.IdOT.
+  Module TyTP := ty_Typ.
+  Module IdLS := IdLS.
+
+  Definition id := id.
+  Definition ty := ty.
+  Definition ctx := cptcontext.
+End ty_Concept1Base.
+
+Module cpt1Defs := MConcept1Defs ty_Concept1Base ty_TypOkDef.
+
+Definition types_valid' (st : cptcontext) (ts : list ty) : Prop :=
+  cpt1Defs.types_ok st ts.
+
+Definition concept_welldefined' (st : cptcontext) (C : conceptdef) : Prop :=
+  match C with
+    cpt_def cname cbody =>
+    let pnds := map namedecl_to_pair cbody in
+    cpt1Defs.concept_ok st pnds
+  end.
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+
+
 
 Definition types_valid (st : cptcontext) (ts : list ty) : Prop :=
   List.Forall (fun ftype => type_valid st ftype) ts.
