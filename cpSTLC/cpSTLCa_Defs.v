@@ -29,11 +29,24 @@ Require Import ConceptParams.BasicPLDefs.Utils.
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
+Require Import ConceptParams.List2AVL.List2Set.
+Require Import ConceptParams.List2AVL.ListPair2Map.
+
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
 
 Require Import Coq.omega.Omega.
+
+
+(** We will use list-2-set and list-pair-2-map machinery 
+ ** when dealing with modules. *)
+
+(** [ListAsSet] module for [id] type of identifiers. *)
+Module IdLS := MList2SetAVL IdUOT.
+
+(** [ListAsSet] module for [id] type of identifiers. *)
+Module IdLPM := MListPair2MapAVL IdUOTOrig.
 
 
 (* ################################################################# *)
@@ -222,7 +235,8 @@ Hint Unfold namedef_list.
 (** Model definition *)
 
 Inductive modeldef : Type :=
-  | mdl_def : id -> id -> namedef_list -> modeldef   (* model Id of Id NameDefs endm *)
+  (* model Id of Id NameDefs endm *)
+  | mdl_def : id -> id -> namedef_list -> modeldef   
 .
 
 Definition modeldef__get_name (M : modeldef) : id :=
@@ -242,7 +256,6 @@ Inductive program : Type :=
 .
 
 (** There are examples of concepts and programs in [cpSTLCa_Examples.v]. *)
-
 
 (* ################################################################# *)
 (** ** Typing *)
@@ -275,13 +288,14 @@ Hint Unfold tycontext.
  *)
 
 (** AVL map from [id] to [ty]. *)
-Definition id_ty_map := id_map ty.
+Definition id_ty_map := IdLPM.id_map ty.
 Hint Unfold id_ty_map.
 
-(** Concept type *)
+(** Concept type (AVL-map from ids into types) *)
 Inductive cty : Type := CTdef : id_ty_map -> cty.
 
-Definition find_ty := mids_find ty.
+(** Lookup of types in a map *)
+Definition find_ty := @IdLPM.IdMap.find ty.
 Hint Unfold find_ty.
 
 (** Models are always defined for some concepts. Therefore, 
@@ -296,13 +310,14 @@ Hint Unfold find_ty.
     and a map from ids to terms. *)
 
 (** AVL map from [id] to [tm]. *)
-Definition id_tm_map := id_map tm.
+Definition id_tm_map := IdLPM.id_map tm.
 Hint Unfold id_tm_map.
 
 (** Model type *)
 Inductive mty : Type := MTdef : id -> id_tm_map -> mty.
 
-Definition find_tm := mids_find tm.
+(** Lookup of terms in a map *)
+Definition find_tm := @IdLPM.IdMap.find tm.
 Hint Unfold find_tm.
 
 (** For further checks we need a _symbol table_ to store 
@@ -362,6 +377,10 @@ Inductive type_valid (st : cptcontext) : ty -> Prop :=
 
 Hint Constructors type_valid. 
 
+Definition types_valid (st : cptcontext) (ts : list ty) : Prop :=
+  List.Forall (fun ftype => type_valid st ftype) ts.
+Hint Unfold types_valid.
+
 (** Now we are ready to define a property "concept is well defined" *)
 
 Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
@@ -371,9 +390,8 @@ Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
     (** all names are distinct *)
     List.NoDup fnames
     (** and all types are valid *)
-    /\ List.Forall (fun ftype => type_valid st ftype) ftypes            
+    /\ types_valid st ftypes             
   end.
-
 Hint Unfold concept_welldefined.
 
 (** We have a symbol table for concepts, concept types, but
@@ -389,7 +407,7 @@ Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Pro
         List.Forall (fun nmdecl => match nmdecl with nm_decl f T =>
                          find_ty f cnmtys = Some T end) cbody
   (** amount of concept members is the same as in the concept type *)
-        /\ List.length cbody = IdMap.cardinal cnmtys
+        /\ List.length cbody = IdLPM.IdMap.cardinal cnmtys
       end end.
 
 (** At this point we cannot do more on contexts. To check models,
@@ -549,7 +567,8 @@ Definition context : Type := partial_map ctxvarty.
 Definition ctxempty : context := @empty ctxvarty.
 
 (** Aux function for typing relation *)
-Definition concept_fun_member (CTable : cptcontext) (C : id) (f : id) (TF : ty) : Prop :=
+Definition concept_fun_member (CTable : cptcontext) 
+           (C : id) (f : id) (TF : ty) : Prop :=
   match CTable C with
   | None => False
   | Some (CTdef fundefs) => find_ty f fundefs = Some TF
@@ -674,18 +693,17 @@ Definition model_welldefined (cst : cptcontext) (mst : mdlcontext) (M : modeldef
     (** fnmtys is a map from C ids to their types *)
     /\ (exists fnmtys : id_ty_map, cst C = Some (CTdef fnmtys)
     (** model members are the same as concept members *)
-       /\ let fnmtys_list := mids_elements ty fnmtys in
+       /\ let fnmtys_list := IdLPM.IdMap.elements fnmtys in
           let Cfnames := List.map fst fnmtys_list in
-          IdSet.Equal (set_from_list fnames) (set_from_list Cfnames)
+          IdLS.IdSet.Equal (IdLS.set_from_list fnames) (IdLS.set_from_list Cfnames)
     (** types of model member terms conincide with 
         concept member types *)
        /\ List.Forall (model_member_valid cst mst fnmtys) mbody
     (** amount of concept members is the same as model members
         (together with previous condition it means that 
         all concept members are defined correctly in a model) *)     
-       /\ IdMap.cardinal fnmtys = List.length mbody)
+       /\ IdLPM.IdMap.cardinal fnmtys = List.length mbody)
   end.
-
 Hint Unfold model_welldefined.
 
 (** And we also need typing relation for models. *)
@@ -696,16 +714,16 @@ Definition model_has_type (cst : cptcontext) (mst : mdlcontext)
   model_welldefined cst mst M
   /\  match M  with mdl_def mname C mbody =>
       match MT with MTdef C' mnmtms =>   
-  (** a concept defined by model coincides with the concept in the type *)
+  (** a concept defined by the model coincides with the concept in the type *)
         C = C'
   (** all model members are reflected in the model type *)      
         /\ List.Forall (fun nmdef => match nmdef with nm_def f t =>
                         find_tm f mnmtms = Some t end) mbody
   (** amount of model members is the same as in the model type *)
-        /\ List.length mbody = IdMap.cardinal mnmtms
+        /\ List.length mbody = IdLPM.IdMap.cardinal mnmtms
       end end.
 
-(** _Note!_ No any evaluation is applied to model members (terms). 
+(** _Note!_ No evaluation is applied to model members (terms). 
     So model members have to be exactly reflected in the model type,
     that is have exactly the same syntactic structure.  *)
 
@@ -826,52 +844,52 @@ Hint Constructors value.
 
     All other forms of term needs recursive search of free vars. *)
 
-Fixpoint free_vars (t : tm) : id_set := 
+Fixpoint free_vars (t : tm) : IdLS.id_set := 
   match t with
   (* FV(x) = {x} *)
-  | tvar x      => ids_singleton x  
+  | tvar x      => IdLS.IdSet.singleton x  
   (* FV(t1 t2) = FV(t1) \union FV(t2) *)
-  | tapp t1 t2  => ids_union (free_vars t1) (free_vars t2)
+  | tapp t1 t2  => IdLS.IdSet.union (free_vars t1) (free_vars t2)
   (* FV(\x:T.t) = FV(t) \ {x} *)                               
   | tabs x T t  => let t_fv := free_vars t in
-      IdSet.remove x t_fv
+      IdLS.IdSet.remove x t_fv
 (*
   (* FV(t # M) = FV(t) because M refers to MTable, not term itself *)   
   | tmapp t M   => free_vars t   
 *)
   (* FV(t # M) = FV(t) \union {M} *)   
-  | tmapp t M   => ids_union (free_vars t) (ids_singleton M)   
+  | tmapp t M   => IdLS.IdSet.union (free_vars t) (IdLS.IdSet.singleton M)   
   (* FV(\c#C.t) = FV(t) because C is not subject for substitution *)
   | tcabs c C t => let t_fv := free_vars t in
-      IdSet.remove c t_fv
+      IdLS.IdSet.remove c t_fv
   (* FV(c.f) = {c} *)
-  | tcinvk c f  => ids_singleton c
+  | tcinvk c f  => IdLS.IdSet.singleton c
   (* FV(true) = {} *)
-  | ttrue       => ids_empty
+  | ttrue       => IdLS.IdSet.empty
   (* FV(false) = {} *)
-  | tfalse      => ids_empty
+  | tfalse      => IdLS.IdSet.empty
   (* FV(if t1 then t2 else t3) = FV(t1) \union FV(t2) \union FV(t3) *)
-  | tif t1 t2 t3 => ids_union (ids_union 
+  | tif t1 t2 t3 => IdLS.IdSet.union (IdLS.IdSet.union 
       (free_vars t1) (free_vars t2)) (free_vars t3)
   (* FV(n) = {} *)
-  | tnat n      => ids_empty
+  | tnat n      => IdLS.IdSet.empty
   (* FV(succ t) = FV(t) *)
   | tsucc t     => free_vars t
   (* FV(pred t) = FV(t) *)
   | tpred t     => free_vars t
   (* FV(plus t1 t2) = FV(t1) \union FV(t2) *)
-  | tplus t1 t2  => ids_union (free_vars t1) (free_vars t2)
+  | tplus t1 t2  => IdLS.IdSet.union (free_vars t1) (free_vars t2)
   (* FV(minus t1 t2) = FV(t1) \union FV(t2) *)
-  | tminus t1 t2 => ids_union (free_vars t1) (free_vars t2)
+  | tminus t1 t2 => IdLS.IdSet.union (free_vars t1) (free_vars t2)
   (* FV(mult t1 t2) = FV(t1) \union FV(t2) *)
-  | tmult t1 t2  => ids_union (free_vars t1) (free_vars t2)
+  | tmult t1 t2  => IdLS.IdSet.union (free_vars t1) (free_vars t2)
   (* FV(eqnat t1 t2) = FV(t1) \union FV(t2) *)
-  | teqnat t1 t2 => ids_union (free_vars t1) (free_vars t2)
+  | teqnat t1 t2 => IdLS.IdSet.union (free_vars t1) (free_vars t2)
   (* FV(lenat t1 t2) = FV(t1) \union FV(t2) *)
-  | tlenat t1 t2 => ids_union (free_vars t1) (free_vars t2) 
+  | tlenat t1 t2 => IdLS.IdSet.union (free_vars t1) (free_vars t2) 
   (* FV(let x=t1 in t2) = FV(t1) \union (FV(t2) \ {x}) *)       
   | tlet x t1 t2 => let t2_fv := free_vars t2 in
-      ids_union (free_vars t1) (IdSet.remove x t2_fv) 
+      IdLS.IdSet.union (free_vars t1) (IdLS.IdSet.remove x t2_fv) 
   end.
 
 (* ----------------------------------------------------------------- *)

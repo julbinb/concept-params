@@ -218,8 +218,8 @@ Module IdPreUOT.
   Qed.
 End IdPreUOT.
 
-(** Original ordered type (used in FSets) *)
-Module IdOTOrig <: OrderedType.OrderedType.
+(** Original ordered type (used in FSets) with usual decidable equality *)
+Module IdUOTOrig <: OrderedType.OrderedType.
   Include IdPreUOT.
   Definition compare : forall x y : t, OrderedType.Compare lt eq x y.
   Proof.
@@ -232,7 +232,7 @@ Module IdOTOrig <: OrderedType.OrderedType.
                unfold gt in H.
                rewrite <- lt_id_iff_lt_nat in H. assumption.
   Defined. 
-End IdOTOrig.
+End IdUOTOrig.
 
 (** And this is a new representation: usual ordered type,
  ** which is used for MSets.
@@ -252,7 +252,7 @@ Module IdUOT <: UsualOrderedType.
   Qed.
 
   Definition compare x y :=
-    match IdOTOrig.compare x y with
+    match IdUOTOrig.compare x y with
     | OrderedType.EQ _ => Eq
     | OrderedType.LT _ => Lt
     | OrderedType.GT _ => Gt
@@ -260,6 +260,6 @@ Module IdUOT <: UsualOrderedType.
 
   Lemma compare_spec : forall x y, CompSpec eq lt x y (compare x y).
   Proof.
-    intros; unfold compare; destruct IdOTOrig.compare; auto.
+    intros; unfold compare; destruct IdUOTOrig.compare; auto.
   Qed.
 End IdUOT.

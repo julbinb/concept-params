@@ -11,7 +11,7 @@
 
 
 (* ***************************************************************** *)
-(** * cpSTLCa Static Analysis and Interpretation
+(** * Static Analysis and Interpretation (Evaluation) of cpSTLCa
 
     (Simply Typed Lambda Calculus with simple Concept Parameters  
      :: version a) *)
@@ -29,8 +29,6 @@ Require Import ConceptParams.BasicPLDefs.Utils.
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
-Require Import ConceptParams.ListAsAVL.ListAsSet.
-
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 
 Require Import Coq.Lists.List.
@@ -40,13 +38,13 @@ Require Import Coq.Bool.Bool.
 Require Import Coq.omega.Omega.
 
 
-Module IdLS := MListAsSet IdUOT.
-
 (* ################################################################# *)
 (** ** Syntax *)
+(* ################################################################# *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Types *)
+(* ----------------------------------------------------------------- *)
 
 Fixpoint beq_ty (T1 T2 : ty) : bool :=
   match T1, T2 with
@@ -62,10 +60,11 @@ Fixpoint beq_ty (T1 T2 : ty) : bool :=
 
 (* ################################################################# *)
 (** ** Typing *)
+(* ################################################################# *)
 
 Definition beq_cty (CT1 CT2 : cty) : bool :=
   match CT1, CT2 with
-    CTdef c1, CTdef c2 => IdMap.equal beq_ty c1 c2            
+    CTdef c1, CTdef c2 => IdLPM.IdMap.equal beq_ty c1 c2            
   end.
 
 (*Lemma beq_cty_refl : forall CT1, beq_cty CT1 CT1 = true.
@@ -77,9 +76,11 @@ Qed.*)
 
 (* ================================================================= *)
 (** *** Checking Types Validity *)
+(* ================================================================= *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Concept Definitions *)
+(* ----------------------------------------------------------------- *)
 
 Definition concept_defined_b (st : cptcontext) (nm : id) : bool :=
   match st nm with
@@ -87,9 +88,7 @@ Definition concept_defined_b (st : cptcontext) (nm : id) : bool :=
   | Some _ => true
   end.
 
-(** We can also write a function [types_are_valid] to check that 
-    all types in a list are valid.
-*)
+(** First, we need to check type definitions. *)
 
 Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
   match t with
@@ -98,6 +97,10 @@ Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
   | TArrow t1 t2     => andb (type_valid_b st t1)  (type_valid_b st t2)
   | TConceptPrm c t1 => andb (concept_defined_b st c) (type_valid_b st t1)
   end.
+
+(** We can also write a function [types_are_valid] to check that 
+    all types in a list are valid.
+*)
 
 Definition types_valid_b (st : cptcontext) (ts : list ty) : bool :=
   List.forallb (fun t => type_valid_b st t) ts.
@@ -110,23 +113,15 @@ Definition types_valid_b (st : cptcontext) (ts : list ty) : bool :=
     It would be convenient to have an algorithm for 
     checking name repetitions in a concept definition.
     To check this, we need an effective set of ids. 
-    The one based on AVL trees is defined in [Maps.v].
+    The one based on AVL trees is defined in [IdLS] module
+    (this an instance of [MList2SetAVL : List2Set]).
 *)
 
-(** Let's write a function [ids_are_unique] to check name repetitions. *)
-(*
-Fixpoint ids_are_unique_recur (nmlist : list id) (nmset : id_set) : bool :=
-  match nmlist with
-  | nil => true
-  | nm :: nms => if ids_mem nm nmset 
-                 then false
-                 else  ids_are_unique_recur nms (ids_add nm nmset)
-  end.
+(** We will further use the function [IdLS.ids_are_unique] to check 
+    name repetitions effectively. *)
 
-Definition ids_are_unique (names : list id) : bool :=
-  ids_are_unique_recur names ids_empty.
-*)
-(** And define a function to check that "concept is well defined" *)
+(** Now we are ready to define a function to check that 
+    "concept is well defined" *)
 
 Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
   match C with
@@ -139,13 +134,14 @@ Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
       (types_valid_b st ftypes)           
   end.
 
-(** And we now need an algorithmical way to find type of a concept. *)
+(** And we now need an algorithmical way to find the type of a concept.
+    We can use [IdLPM] machinery to convert lists into maps. *)
 
 Definition concept_type_check (cst : cptcontext) (C : conceptdef) : option cty :=
   if concept_welldefined_b cst C 
   then match C with cpt_def cname cbody =>
       let cbody' := map namedecl_to_pair cbody in
-      Some (CTdef (map_from_list cbody'))
+      Some (CTdef (IdLPM.map_from_list cbody'))
   end
   else 
     None.
@@ -157,6 +153,7 @@ Definition concept_type_check (cst : cptcontext) (C : conceptdef) : option cty :
 
 (* ================================================================= *)
 (** *** Typing of Terms *)
+(* ================================================================= *)
 
 (** Let's define a typechecker, which corresponds to 
     [has_type] relation. *)
@@ -278,6 +275,7 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Model Definitions *)
+(* ----------------------------------------------------------------- *)
 
 (** Model definition is Ok if:
     - concept name is defined;
@@ -317,10 +315,10 @@ Definition model_welldefined_b (cst : cptcontext) (mst : mdlcontext)
     | Some (CTdef fnmtys) =>
       let (fnames, fterms) := split (map namedef_to_pair mbody) in
     (** model members are the same as concept members *)
-      let fnmtys_list := mids_elements ty fnmtys in
+      let fnmtys_list := IdLPM.IdMap.elements fnmtys in
       let Cfnames := List.map fst fnmtys_list in
       andb
-        (IdSet.equal (set_from_list fnames) (set_from_list Cfnames))
+        (IdLS.IdSet.equal (IdLS.set_from_list fnames) (IdLS.set_from_list Cfnames))
       (andb
     (** types of model member terms conincide with 
         concept member types *)
@@ -328,7 +326,7 @@ Definition model_welldefined_b (cst : cptcontext) (mst : mdlcontext)
     (** amount of concept members is the same as model members
         (together with previous condition it means that 
         all concept members are defined correctly in a model) *)  
-        (beq_nat (IdMap.cardinal fnmtys) (List.length mbody)))
+        (beq_nat (IdLPM.IdMap.cardinal fnmtys) (List.length mbody)))
     | _ => false     
   end end.
 
@@ -339,7 +337,7 @@ Definition model_type_check (cst : cptcontext) (mst : mdlcontext)
   if model_welldefined_b cst mst M
   then match M with mdl_def mname C mbody =>
        let mbody' := map namedef_to_pair mbody in
-       Some (MTdef C (map_from_list mbody'))
+       Some (MTdef C (IdLPM.map_from_list mbody'))
   end
   else 
     None.

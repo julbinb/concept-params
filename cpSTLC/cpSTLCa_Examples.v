@@ -23,8 +23,6 @@ Require Import ConceptParams.BasicPLDefs.Relations.
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
-Require Import ConceptParams.ListAsAVL.ListAsSet.
-
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 Require Import ConceptParams.cpSTLC.cpSTLCa_Interpreter.
 
@@ -37,9 +35,11 @@ Require Import Coq.omega.Omega.
 
 (* ################################################################# *)
 (** ** Syntax *)
+(* ################################################################# *)
 
 (* ================================================================= *)
 (** *** Examples *)
+(* ================================================================= *)
 
 (** Let's define some examples so that we can check them later *)
 
@@ -214,13 +214,16 @@ End Examples.
 
 (* ################################################################# *)
 (** ** Typing *)
+(* ################################################################# *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Concept Definitions *)
+(* ----------------------------------------------------------------- *)
 
 (* Examples / ---------------------------- *)
 Module Examples_ConceptTypes.
   Export Examples.
+  Import IdLPM.
   
   Definition CTnrevmap := CTdef (map_from_list [
     (FNmap, TArrow TNat TNat);                          
@@ -329,6 +332,7 @@ End TestIdsUniqueness1.
 
 (* ================================================================= *)
 (** *** Checking Types Validity *)
+(* ================================================================= *)
 
 (** Let's check our concepts. *)
 
@@ -402,13 +406,16 @@ End TestTypes1_b.
 
 (* ================================================================= *)
 (** *** Typing of Terms *)
+(* ================================================================= *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Model Definitions *)
+(* ----------------------------------------------------------------- *)
 
 (* Examples / ---------------------------- *)
 Module Examples_ModelTypes.
   Export Examples.
+  Import IdLPM.
   
   Definition MTnrm_plus1 := MTdef CNnrevmap (map_from_list [
     (FNmap, tabs vx TNat (tsucc (tvar vx)));
@@ -439,53 +446,57 @@ End Examples_ModelTypes.
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Programs *)
+(* ----------------------------------------------------------------- *)
 
 
 (* ################################################################# *)
 (** ** Operational Semantics *)
-
+(* ################################################################# *)
 
 (* ================================================================= *)
 (** *** Substitution *)
+(* ================================================================= *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Free Variables *)
+(* ----------------------------------------------------------------- *)
 
 (* Tests / ------------------------------- *)
 Module TestFV. 
   Import Examples.
-  
+  Import IdLS.
+
   Example test_free_vars_1 : 
-    ids_equal (free_vars tarithm1) (set_from_list [vx]) = true.
+    IdSet.equal (free_vars tarithm1) (set_from_list [vx]) = true.
   Proof. reflexivity. Qed.
 
   Example test_free_vars_2 : 
-    ids_equal (free_vars tarithm2) (set_from_list [vx; vy]) = true.
+    IdSet.equal (free_vars tarithm2) (set_from_list [vx; vy]) = true.
   Proof. reflexivity. Qed.
 
   Example test_free_vars_3 : 
-    ids_equal (free_vars tfun1) (set_from_list []) = true.
+    IdSet.equal (free_vars tfun1) (set_from_list []) = true.
   Proof. reflexivity. Qed.
 
   (* Compute (free_vars tfun2).*)
   Example test_free_vars_4 : 
-    ids_equal (free_vars tfun2) (set_from_list [vz]) = true.
+    IdSet.equal (free_vars tfun2) (set_from_list [vz]) = true.
   Proof. reflexivity. Qed.
 
   Example test_free_vars_5 : 
-    ids_equal (free_vars tfun3) (set_from_list [vx; vz]) = true.
+    IdSet.equal (free_vars tfun3) (set_from_list [vx; vz]) = true.
   Proof. reflexivity. Qed.
 
   Example test_free_vars_6 : 
-    ids_equal (free_vars tlet1) (set_from_list []) = true.
+    IdSet.equal (free_vars tlet1) (set_from_list []) = true.
   Proof. reflexivity. Qed.
 
   Example test_free_vars_7 : 
-    ids_equal (free_vars tlet2) (set_from_list [vx]) = true.
+    IdSet.equal (free_vars tlet2) (set_from_list [vx]) = true.
   Proof. reflexivity. Qed.
 
   Example test_free_vars_8 : 
-    ids_equal (free_vars tif1) (set_from_list []) = true.
+    IdSet.equal (free_vars tif1) (set_from_list []) = true.
   Proof. reflexivity. Qed.
 
 End TestFV.
