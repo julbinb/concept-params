@@ -1,7 +1,7 @@
 (* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 (* Module
   
-   Last Update: Fri, 28 Apr 2017
+   Last Update: Tue, 2 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 Add LoadPath "../..".
@@ -9,7 +9,7 @@ Add LoadPath "../..".
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
-Require Import ConceptParams.List2AVL.List2Set.
+Require Import ConceptParams.SetMapLib.List2Set.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -30,63 +30,65 @@ Require Import Coq.Structures.Orders.
 (** ** TODO *)
 (* ################################################################# *)
 
-Module Type Typ.
+Module Type Data.
+  (** Type of Data *)
   Parameter t : Type.
+  (** Type of Context *)
   Parameter ctx : Type.
-End Typ.
+End Data.
 
-Module Type TypOkDef (Import T : Typ).
+Module Type DataOkDef (Import D : Data).
   Parameter is_ok : ctx -> t -> Prop.
-End TypOkDef.
+End DataOkDef.
 
-Module Type TypOkInterp (Import T : Typ).
+Module Type DataOkInterp (Import D : Data).
   Parameter is_ok_b : ctx -> t -> bool.
-End TypOkInterp.
+End DataOkInterp.
 
-Module Type TypOkProp (Import T : Typ) 
-       (Import TD : TypOkDef T) (Import TI : TypOkInterp T).
+Module Type DataOkProp (Import D : Data) 
+       (Import DDef : DataOkDef D) (Import DInt : DataOkInterp D).
 
   Axiom is_ok_b__sound : forall (c : ctx) (x : t),
       is_ok_b c x = true -> is_ok c x.
   Axiom is_ok_b__complete : forall (c : ctx) (x : t),
       is_ok c x -> is_ok_b c x = true.
-End TypOkProp.
+End DataOkProp.
 
 
-Module Type Concept1Base.
+Module Type Intrfs1Base.
   Declare Module IdOT : UsualOrderedType.
-  Declare Module TyTP : Typ.
+  Declare Module TyDT : Data.
   Declare Module IdLS : List2Set IdOT.
 
   Definition id := IdOT.t.
-  Definition ty := TyTP.t.
-  Definition ctx := TyTP.ctx.
-End Concept1Base.
+  Definition ty := TyDT.t.
+  Definition ctx := TyDT.ctx.
+End Intrfs1Base.
 
 
-Module MConcept1Defs (Import MCB : Concept1Base) 
-       (Import TOkD : TypOkDef MCB.TyTP).
+Module MIntrfs1Defs (Import MIB : Intrfs1Base) 
+       (Import TOkD : DataOkDef MIB.TyDT).
 
   Definition types_ok (c : ctx) (tps : list ty) : Prop :=
     List.Forall (fun tp => is_ok c tp) tps.
 
-  Definition concept_ok (c : ctx) (ds : list (id * ty)) : Prop :=
+  Definition intrfs_ok (c : ctx) (ds : list (id * ty)) : Prop :=
     let (nms, tps) := split ds in
     (** all names are distinct *)
     List.NoDup nms
     (** and all types are valid *)
     /\ types_ok c tps. 
 
-End MConcept1Defs.
+End MIntrfs1Defs.
 
 
-Module MConcept1Interp (Import MCB : Concept1Base) 
-       (Import TOkI : TypOkInterp MCB.TyTP).
+Module MIntrfs1Interp (Import MIB : Intrfs1Base) 
+       (Import TOkI : DataOkInterp MIB.TyDT).
 
   Definition types_ok_b (c : ctx) (tps : list ty) : bool :=
     List.forallb (fun tp => is_ok_b c tp) tps.
 
-  Definition concept_ok_b (c : ctx) (ds : list (id * ty)) : bool :=
+  Definition intrfs_ok_b (c : ctx) (ds : list (id * ty)) : bool :=
     let (nms, tps) := split ds in
     andb
       (** all names are distinct *)
@@ -94,17 +96,17 @@ Module MConcept1Interp (Import MCB : Concept1Base)
       (** and all types are valid *)
       (types_ok_b c tps).
  
-End MConcept1Interp.
+End MIntrfs1Interp.
 
 
-Module MConcept1Props 
-       (Import MCB : Concept1Base)
-       (Import TOkD : TypOkDef MCB.TyTP)
-       (Import TOkI : TypOkInterp MCB.TyTP)
-       (Import TOkP : TypOkProp MCB.TyTP TOkD TOkI)
+Module MIntrfs1Props 
+       (Import MIB : Intrfs1Base)
+       (Import TOkD : DataOkDef MIB.TyDT)
+       (Import TOkI : DataOkInterp MIB.TyDT)
+       (Import TOkP : DataOkProp MIB.TyDT TOkD TOkI)
 .
-  Module Import MCD := MConcept1Defs   MCB TOkD.
-  Module Import MCI := MConcept1Interp MCB TOkI.
+  Module Import MID := MIntrfs1Defs   MIB TOkD.
+  Module Import MII := MIntrfs1Interp MIB TOkI.
 
   Lemma types_ok_b__sound : forall (c : ctx) (ts : list ty),
       types_ok_b c ts = true ->
@@ -139,13 +141,13 @@ Module MConcept1Props
       + apply IHts'. assumption.
   Qed.
 
-  Lemma concept_ok_b__sound : forall (c : ctx) (ds : list (id * ty)),
-      concept_ok_b c ds = true ->
-      concept_ok c ds.
+  Lemma intrfs_ok_b__sound : forall (c : ctx) (ds : list (id * ty)),
+      intrfs_ok_b c ds = true ->
+      intrfs_ok c ds.
   Proof.
     intros c ds. intros H.
-    unfold concept_ok_b in H. 
-    unfold concept_ok.
+    unfold intrfs_ok_b in H. 
+    unfold intrfs_ok.
     destruct (split ds).
     rewrite -> andb_true_iff in H. inversion H as [Hid Hty].
     apply IdLS.Props.ids_are_unique__sound in Hid.
@@ -153,13 +155,13 @@ Module MConcept1Props
     split; tauto.
   Qed.
 
-  Lemma concept_ok_b__complete : forall (c : ctx) (ds : list (id * ty)),
-      concept_ok c ds ->
-      concept_ok_b c ds = true.
+  Lemma intrfs_ok_b__complete : forall (c : ctx) (ds : list (id * ty)),
+      intrfs_ok c ds ->
+      intrfs_ok_b c ds = true.
   Proof.
     intros c ds. intros H.
-    unfold concept_ok_b.
-    unfold concept_ok in H.
+    unfold intrfs_ok_b.
+    unfold intrfs_ok in H.
     destruct (split ds).
     inversion H as [Hdup Htys].
     rewrite -> andb_true_iff. split.
@@ -167,7 +169,7 @@ Module MConcept1Props
     apply types_ok_b__complete. assumption.
   Qed.
 
-End MConcept1Props.
+End MIntrfs1Props.
 
 
 

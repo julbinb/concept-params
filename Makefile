@@ -102,9 +102,9 @@ VFILES:=BasicPLDefs/Identifier.v\
   BasicPLDefs/Utils.v\
   AuxTactics/LibTactics.v\
   AuxTactics/BasicTactics.v\
-  List2AVL/List2Set.v\
-  List2AVL/ListPair2Map.v\
-  GenericModuleLib/Concept1.v\
+  SetMapLib/List2Set.v\
+  SetMapLib/ListPair2FMap.v\
+  GenericModuleLib/MIntrfs1.v\
   cpSTLC/cpSTLCa_Defs.v\
   cpSTLC/cpSTLCa_Interpreter.v\
   cpSTLC/cpSTLCa_Examples.v\

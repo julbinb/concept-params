@@ -31,7 +31,7 @@ Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 
-Require Import ConceptParams.GenericModuleLib.Concept1.
+Require Import ConceptParams.GenericModuleLib.MIntrfs1.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -106,20 +106,40 @@ Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
 
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
-Module ty_TypOkInterp <: TypOkInterp ty_Typ.
+Module ty_DataOkInterp <: DataOkInterp ty_Data.
   Definition is_ok_b := type_valid_b.
-End ty_TypOkInterp.
+End ty_DataOkInterp.
 
-Module cpt1Interp := MConcept1Interp ty_Concept1Base ty_TypOkInterp.
+Module conceptInterp := MIntrfs1Interp ty_Intrfs1Base ty_DataOkInterp.
 
+(*
 Definition types_valid_b' (st : cptcontext) (ts : list ty) : bool :=
-  cpt1Interp.types_ok_b st ts.
+  conceptInterp.types_ok_b st ts.
+*)
 
-Definition concept_welldefined_b' (st : cptcontext) (C : conceptdef) : bool :=
+(** There is a problem: it's quite cumbersome to check 
+    well-definedness of concept definitions in propositional style.
+    We could implement auxuliary tactics to make proofs easier,
+    but it's not very practical. 
+
+    It would be convenient to have an algorithm for 
+    checking name repetitions in a concept definition.
+    To check this, we need an effective set of ids. 
+    The one based on AVL trees is defined in [IdLS] module
+    (this an instance of [MList2SetAVL : List2Set]).
+*)
+
+(** We will further use the function [IdLS.ids_are_unique] to check 
+    name repetitions effectively. *)
+
+(** Now we are ready to define a function to check that 
+    "concept is well defined" *)
+
+Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
   match C with
     cpt_def cname cbody =>
     let pnds := map namedecl_to_pair cbody in
-    cpt1Interp.concept_ok_b st pnds
+    conceptInterp.intrfs_ok_b st pnds
   end.
 
 
@@ -129,7 +149,7 @@ Definition concept_welldefined_b' (st : cptcontext) (C : conceptdef) : bool :=
 
 
 
-
+(*
 
 (** We can also write a function [types_are_valid] to check that 
     all types in a list are valid.
@@ -166,6 +186,7 @@ Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
       (** and all types are valid *)
       (types_valid_b st ftypes)           
   end.
+*)
 
 (** And we now need an algorithmical way to find the type of a concept.
     We can use [IdLPM] machinery to convert lists into maps. *)

@@ -33,7 +33,7 @@ Require Import ConceptParams.AuxTactics.BasicTactics.
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 Require Import ConceptParams.cpSTLC.cpSTLCa_Interpreter.
 
-Require Import ConceptParams.GenericModuleLib.Concept1.
+Require Import ConceptParams.GenericModuleLib.MIntrfs1.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -185,7 +185,7 @@ Proof.
 Qed.
 
 (* Print types_valid_b. *)
-
+(*
 Lemma types_valid_b__sound : forall (cst : cptcontext) (ts : list ty),
     types_valid_b cst ts = true ->
     List.Forall (fun ftype => type_valid cst ftype) ts.
@@ -201,6 +201,7 @@ Proof.
     apply IHts' in Hts'. apply type_valid_b__sound in Ht.
     apply Forall_cons; auto.
 Qed.
+*)
 
 (* ----------------------------------------------------------------- *)
 
@@ -227,6 +228,7 @@ Proof.
     (* type_valid *) assumption.
 Qed.
 
+(*
 Lemma types_valid_b__complete : forall (cst : cptcontext) (ts : list ty),
     List.Forall (fun ftype => type_valid cst ftype) ts ->
     types_valid_b cst ts = true.
@@ -242,50 +244,59 @@ Proof.
     + apply type_valid_b__complete. assumption.
     + apply IHts'. assumption.
 Qed.
-
-
+*)
 
 
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
-Module ty_TypOkProp <: TypOkProp ty_Typ ty_TypOkDef ty_TypOkInterp.
+Module ty_DataOkProp <: DataOkProp ty_Data ty_DataOkDef ty_DataOkInterp.
   Definition is_ok_b__sound := type_valid_b__sound.
   Definition is_ok_b__complete := type_valid_b__complete.
-End ty_TypOkProp.
+End ty_DataOkProp.
 
-Module cpt1Props := MConcept1Props ty_Concept1Base 
-                                   ty_TypOkDef ty_TypOkInterp ty_TypOkProp.
+Module conceptProps := MIntrfs1Props 
+                         ty_Intrfs1Base 
+                         ty_DataOkDef ty_DataOkInterp ty_DataOkProp.
 
+(*
 Lemma types_valid_b__sound' : forall (cst : cptcontext) (ts : list ty),
     types_valid_b' cst ts = true ->
     types_valid' cst ts.
 Proof.
-  apply cpt1Props.types_ok_b__sound.
+  apply concept.types_ok_b__sound.
 Qed.
 
 Lemma types_valid_b__complete' : forall (cst : cptcontext) (ts : list ty),
     types_valid'   cst ts ->
     types_valid_b' cst ts = true.
 Proof.
-  apply cpt1Props.types_ok_b__complete.
+  apply conceptProps.types_ok_b__complete.
 Qed.
+*)
 
-Theorem concept_well_defined_b__sound' : forall (cst : cptcontext) (C : conceptdef),
-    concept_welldefined_b' cst C = true ->
-    concept_welldefined'   cst C.
+(* ----------------------------------------------------------------- *)
+(** **** Concept Well-definedness *)
+(* ----------------------------------------------------------------- *)
+
+(** And the final steps to prove that [concept_well_defined_b]
+    is sound and complete. *)
+
+Theorem concept_well_defined_b__sound : forall (cst : cptcontext) (C : conceptdef),
+    concept_welldefined_b cst C = true ->
+    concept_welldefined   cst C.
 Proof.
   intros cst C. intros H.
   destruct C as [nm body]. simpl in *. 
-  apply cpt1Props.concept_ok_b__sound. assumption.
+  apply conceptProps.intrfs_ok_b__sound. assumption.
 Qed.
 
-Theorem concept_well_defined_b__complete' : forall (cst : cptcontext) (C : conceptdef),
-    concept_welldefined'   cst C ->
-    concept_welldefined_b' cst C = true.
+Theorem concept_well_defined_b__complete : forall (cst : cptcontext) (C : conceptdef),
+    concept_welldefined   cst C ->
+    concept_welldefined_b cst C = true.
 Proof.
   intros cst C. intros H.
   destruct C as [nm body]. simpl in *.
-  apply cpt1Props.concept_ok_b__complete. assumption.
+  apply conceptProps.intrfs_ok_b__complete. assumption.
 Qed.
 
 
@@ -295,7 +306,7 @@ Qed.
 
 
 
-
+(*
 
 (* ----------------------------------------------------------------- *)
 (** **** Concept Well-definedness *)
@@ -331,6 +342,8 @@ Proof.
   apply ids_are_unique__complete in Hdup. assumption.
   apply types_valid_b__complete. assumption.
 Qed.
+
+*)
 
 (* ----------------------------------------------------------------- *)
 (** **** Concept Typing *)
@@ -382,9 +395,10 @@ Lemma concept_welldefined_b__cons :
     concept_welldefined_b cst (cpt_def Cnm nds) = true.
 Proof.
   intros cst Cnm nd nds H.
-  simpl in *.
-  destruct (namedecl_to_pair nd) as [nm tp].
-  destruct (split (map namedecl_to_pair nds)) as [fnames' ftypes'].
+  simpl in *. unfold conceptInterp.intrfs_ok_b in *.
+  destruct (namedecl_to_pair nd) as [nm tp]. simpl in *.
+  destruct (split (map namedecl_to_pair nds)) as [fnames' ftypes'] eqn:Heq.
+  rewrite Heq at 1. rewrite Heq in H at 1.
   apply andb_true_iff.
   apply andb_true_iff in H.
   propositional.
@@ -400,13 +414,16 @@ Lemma concept_welldefined__cons :
     concept_welldefined cst (cpt_def Cnm (nd :: nds)) ->
     concept_welldefined cst (cpt_def Cnm nds).
 Proof.
-  intros cst Cnm nd nds H.
-  simpl in *.
-  destruct (namedecl_to_pair nd) as [nm tp].
-  destruct (split (map namedecl_to_pair nds)) as [fnames' ftypes'].
+  intros cst Cnm nd nds. simpl.
+  unfold conceptDefs.intrfs_ok.
+  simpl in *. 
+  destruct (split (map namedecl_to_pair nds)) as [fnames' ftypes'] eqn:Heq.
+  rewrite Heq at 1. 
+  destruct (namedecl_to_pair nd) as [nm tp]. simpl.  
+  rewrite Heq at 1.
+  intros H.
   propositional.
-  inversion H0. assumption.
-  simpl in H1.  
+  inversion H0. assumption.  
   inversion H1; propositional.
 Qed.
 
@@ -503,8 +520,8 @@ Proof.
     simpl in *. symmetry in H4, H5.
     apply cardinal_Empty in H4. apply cardinal_Empty in H5.
     unfold IdLPM.IdMap.Empty in *.
-    unfold IdLPM.IdMap.Raw.Proofs.Empty in H4, H5.
-    apply F.Equal_mapsto_iff.
+(*    unfold IdLPM.IdMap.Proofs.Empty in H4, H5. *)
+    apply Equal_mapsto_iff.
     intros k e. split; intros contra.
     + unfold IdLPM.IdMap.MapsTo in contra. apply H4 in contra. contradiction.
     + unfold IdLPM.IdMap.MapsTo in contra. apply H5 in contra. contradiction.
@@ -520,6 +537,8 @@ Proof.
     intros k e. split; intros Hmaps;
                   assert (Hin : List.In (k, e) pnds).
     (* CT -> CT' *)
+    unfold conceptDefs.intrfs_ok in *.
+    destruct (split pnds) in H.
     apply elem_in_map_eq_length__elem_in_list with (CT := CT).
     subst pnds.
     apply forall_namedecl__forall_pair. apply H3. assumption. 

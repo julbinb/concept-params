@@ -29,10 +29,10 @@ Require Import ConceptParams.BasicPLDefs.Utils.
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
-Require Import ConceptParams.List2AVL.List2Set.
-Require Import ConceptParams.List2AVL.ListPair2Map.
+Require Import ConceptParams.SetMapLib.List2Set.
+Require Import ConceptParams.SetMapLib.ListPair2FMap.
 
-Require Import ConceptParams.GenericModuleLib.Concept1.
+Require Import ConceptParams.GenericModuleLib.MIntrfs1.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -48,7 +48,8 @@ Require Import Coq.omega.Omega.
 Module IdLS := MList2SetAVL IdUOT.
 
 (** [ListAsSet] module for [id] type of identifiers. *)
-Module IdLPM := MListPair2MapAVL IdUOTOrig.
+Module IdLPM' := MListPair2FMapAVL IdUOTOrig.
+Module IdLPM := IdLPM'.M. (*MListPair2MapAVL IdUOTOrig.*)
 
 
 (* ################################################################# *)
@@ -384,42 +385,48 @@ Hint Constructors type_valid.
 
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
-Module ty_Typ <: Typ.
+Module ty_Data <: Data.
   Definition t := ty.
   Definition ctx := cptcontext.
-End ty_Typ.
+End ty_Data.
  
-Module ty_TypOkDef <: TypOkDef ty_Typ.
+Module ty_DataOkDef <: DataOkDef ty_Data.
   Definition is_ok := type_valid.
-End ty_TypOkDef.
+End ty_DataOkDef.
 
-Module ty_Concept1Base <: Concept1Base.
+Module ty_Intrfs1Base <: Intrfs1Base.
   Module IdOT := IdLS.IdOT.
-  Module TyTP := ty_Typ.
+  Module TyDT := ty_Data.
   Module IdLS := IdLS.
 
   Definition id := id.
   Definition ty := ty.
   Definition ctx := cptcontext.
-End ty_Concept1Base.
+End ty_Intrfs1Base.
 
-Module cpt1Defs := MConcept1Defs ty_Concept1Base ty_TypOkDef.
+Module conceptDefs := MIntrfs1Defs ty_Intrfs1Base ty_DataOkDef.
 
+(*
 Definition types_valid' (st : cptcontext) (ts : list ty) : Prop :=
-  cpt1Defs.types_ok st ts.
+  intrfs1Defs.types_ok st ts.
+*)
 
-Definition concept_welldefined' (st : cptcontext) (C : conceptdef) : Prop :=
+(** Now we are ready to define a property "concept is well defined" *)
+
+Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
   match C with
     cpt_def cname cbody =>
     let pnds := map namedecl_to_pair cbody in
-    cpt1Defs.concept_ok st pnds
+    conceptDefs.intrfs_ok st pnds
   end.
+Hint Unfold concept_welldefined.
+
 
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
 
 
-
+(*
 Definition types_valid (st : cptcontext) (ts : list ty) : Prop :=
   List.Forall (fun ftype => type_valid st ftype) ts.
 Hint Unfold types_valid.
@@ -436,6 +443,7 @@ Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
     /\ types_valid st ftypes             
   end.
 Hint Unfold concept_welldefined.
+*)
 
 (** We have a symbol table for concepts, concept types, but
     we have not defined yet a relation on concept definitions and
