@@ -66,6 +66,11 @@ Module Type List2Set (id_UOT : UsualOrderedType).
     
     Axiom ids_are_unique__complete : forall (l : list id),
         NoDup l -> ids_are_unique l = true.
+
+    Axiom ids_are_unique__cons : forall (l : list id) (x : id),
+        ids_are_unique (x :: l) = true ->
+        ids_are_unique l = true.
+
   End Props.
 
 End List2Set.
@@ -452,6 +457,16 @@ Module MList2MSet
         + reflexivity.
     Qed.
 
+    Theorem ids_are_unique__cons : forall (l : list id) (x : id),
+        ids_are_unique (x :: l) = true ->
+        ids_are_unique l = true.
+    Proof.
+      intros l x H.
+      apply ids_are_unique__complete.
+      apply ids_are_unique__sound in H.
+      inversion H; assumption.
+    Qed.
+    
   End Props.
 
 End MList2MSet.
@@ -842,6 +857,16 @@ Module MList2SetAVL
         + assumption.
         + assumption.
         + reflexivity.
+    Qed.
+
+    Theorem ids_are_unique__cons : forall (l : list id) (x : id),
+        ids_are_unique (x :: l) = true ->
+        ids_are_unique l = true.
+    Proof.
+      intros l x H.
+      apply ids_are_unique__complete.
+      apply ids_are_unique__sound in H.
+      inversion H; assumption.
     Qed.
 
   End Props.

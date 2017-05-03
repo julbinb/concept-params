@@ -1,7 +1,8 @@
 (* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
-(* Module
+(* Module with Certified Checking 
+   of the simplest module-interface.
   
-   Last Update: Tue, 2 May 2017
+   Last Update: Wed, 3 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 Add LoadPath "../..".
@@ -18,16 +19,18 @@ Require Import Coq.Bool.Bool.
 Require Import Coq.Structures.Orders.
 
 (* ***************************************************************** *)
-(** * TODO 
+(** * Module-Interface 1 
 
-      (TODO) *)
+      The Simplest Semantics of Modules *)
 
-(** TODO *)
+(** Module-Interfase is well-defined if
+    all names are different 
+    and all types are well-defined. *)
 (* ***************************************************************** *)
 (* ***************************************************************** *)
 
 (* ################################################################# *)
-(** ** TODO *)
+(** ** Module Types defining Parameters *)
 (* ################################################################# *)
 
 Module Type Data.
@@ -54,6 +57,9 @@ Module Type DataOkProp (Import D : Data)
       is_ok c x -> is_ok_b c x = true.
 End DataOkProp.
 
+(* ################################################################# *)
+(** ** Shared Parameters of all building blocks *)
+(* ################################################################# *)
 
 Module Type Intrfs1Base.
   Declare Module IdOT : UsualOrderedType.
@@ -65,6 +71,9 @@ Module Type Intrfs1Base.
   Definition ctx := TyDT.ctx.
 End Intrfs1Base.
 
+(* ################################################################# *)
+(** ** Propositional Part *)
+(* ################################################################# *)
 
 Module MIntrfs1Defs (Import MIB : Intrfs1Base) 
        (Import TOkD : DataOkDef MIB.TyDT).
@@ -81,6 +90,9 @@ Module MIntrfs1Defs (Import MIB : Intrfs1Base)
 
 End MIntrfs1Defs.
 
+(* ################################################################# *)
+(** ** Computable Part (static checker of the interpreter) *)
+(* ################################################################# *)
 
 Module MIntrfs1Interp (Import MIB : Intrfs1Base) 
        (Import TOkI : DataOkInterp MIB.TyDT).
@@ -98,6 +110,9 @@ Module MIntrfs1Interp (Import MIB : Intrfs1Base)
  
 End MIntrfs1Interp.
 
+(* ################################################################# *)
+(** ** Proofs of Correctness *)
+(* ################################################################# *)
 
 Module MIntrfs1Props 
        (Import MIB : Intrfs1Base)
@@ -141,7 +156,7 @@ Module MIntrfs1Props
       + apply IHts'. assumption.
   Qed.
 
-  Lemma intrfs_ok_b__sound : forall (c : ctx) (ds : list (id * ty)),
+  Theorem intrfs_ok_b__sound : forall (c : ctx) (ds : list (id * ty)),
       intrfs_ok_b c ds = true ->
       intrfs_ok c ds.
   Proof.
@@ -155,7 +170,7 @@ Module MIntrfs1Props
     split; tauto.
   Qed.
 
-  Lemma intrfs_ok_b__complete : forall (c : ctx) (ds : list (id * ty)),
+  Theorem intrfs_ok_b__complete : forall (c : ctx) (ds : list (id * ty)),
       intrfs_ok c ds ->
       intrfs_ok_b c ds = true.
   Proof.
@@ -180,6 +195,21 @@ Module MIntrfs1Props
     propositional.
     inversion H0. assumption.
     inversion H1. assumption.
+  Qed.
+
+  Theorem intrfs_ok_b__cons : forall (c : ctx) (ds : list (id * ty))
+                                   (nm : id) (tp : ty),
+      intrfs_ok_b c ((nm, tp) :: ds) = true ->
+      intrfs_ok_b c ds = true.
+  Proof.
+    intros c ds nm tp H.
+    unfold intrfs_ok_b in *. simpl in *.
+    destruct (split ds) as [nms tps] eqn:Heq.
+    apply andb_true_iff. apply andb_true_iff in H.
+    propositional.
+    apply IdLS.Props.ids_are_unique__cons with (x := nm); assumption.
+    apply types_ok_b__complete.
+    apply types_ok_b__sound in H1. inversion H1. assumption.
   Qed.
 
 End MIntrfs1Props.

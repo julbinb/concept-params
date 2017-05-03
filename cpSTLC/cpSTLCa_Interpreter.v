@@ -100,10 +100,6 @@ Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
   | TConceptPrm c t1 => andb (concept_defined_b st c) (type_valid_b st t1)
   end.
 
-
-
-
-
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
 Module ty_DataOkInterp <: DataOkInterp ty_Data.
@@ -111,11 +107,6 @@ Module ty_DataOkInterp <: DataOkInterp ty_Data.
 End ty_DataOkInterp.
 
 Module conceptInterp := MIntrfs1Interp ty_Intrfs1Base ty_DataOkInterp.
-
-(*
-Definition types_valid_b' (st : cptcontext) (ts : list ty) : bool :=
-  conceptInterp.types_ok_b st ts.
-*)
 
 (** There is a problem: it's quite cumbersome to check 
     well-definedness of concept definitions in propositional style.
@@ -127,6 +118,9 @@ Definition types_valid_b' (st : cptcontext) (ts : list ty) : bool :=
     To check this, we need an effective set of ids. 
     The one based on AVL trees is defined in [IdLS] module
     (this an instance of [MList2SetAVL : List2Set]).
+
+    And fortunately, this algo is used in MIntrfs1 computable block!
+    In [conceptInterp], namely.
 *)
 
 (** We will further use the function [IdLS.ids_are_unique] to check 
@@ -142,51 +136,7 @@ Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
     conceptInterp.intrfs_ok_b st pnds
   end.
 
-
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
-
-
-
-
-
-(*
-
-(** We can also write a function [types_are_valid] to check that 
-    all types in a list are valid.
-*)
-
-Definition types_valid_b (st : cptcontext) (ts : list ty) : bool :=
-  List.forallb (fun t => type_valid_b st t) ts.
-
-(** There is a problem: it's quite cumbersome to check 
-    well-definedness of concept definitions in propositional style.
-    We could implement auxuliary tactics to make proofs easier,
-    but it's not very practical. 
-
-    It would be convenient to have an algorithm for 
-    checking name repetitions in a concept definition.
-    To check this, we need an effective set of ids. 
-    The one based on AVL trees is defined in [IdLS] module
-    (this an instance of [MList2SetAVL : List2Set]).
-*)
-
-(** We will further use the function [IdLS.ids_are_unique] to check 
-    name repetitions effectively. *)
-
-(** Now we are ready to define a function to check that 
-    "concept is well defined" *)
-
-Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
-  match C with
-    cpt_def cname cbody =>
-    let (fnames, ftypes) := split (map namedecl_to_pair cbody) in
-    andb
-      (** all names are distinct *)
-      (IdLS.ids_are_unique fnames)
-      (** and all types are valid *)
-      (types_valid_b st ftypes)           
-  end.
-*)
 
 (** And we now need an algorithmical way to find the type of a concept.
     We can use [IdLPM] machinery to convert lists into maps. *)

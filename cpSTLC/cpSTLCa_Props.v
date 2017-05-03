@@ -184,25 +184,6 @@ Proof.
     apply IHT in H2. assumption.
 Qed.
 
-(* Print types_valid_b. *)
-(*
-Lemma types_valid_b__sound : forall (cst : cptcontext) (ts : list ty),
-    types_valid_b cst ts = true ->
-    List.Forall (fun ftype => type_valid cst ftype) ts.
-Proof.
-  intros cst ts. unfold types_valid_b.
-  induction ts as [| t ts'];
-    intros H.
-  - (* ts = nil *)
-    apply Forall_nil.
-  - (* ts = t :: ts' *)
-    simpl in H. rewrite -> andb_true_iff in H.
-    inversion H as [Ht Hts']; clear H.
-    apply IHts' in Hts'. apply type_valid_b__sound in Ht.
-    apply Forall_cons; auto.
-Qed.
-*)
-
 (* ----------------------------------------------------------------- *)
 
 (** Completeness. *)
@@ -228,25 +209,6 @@ Proof.
     (* type_valid *) assumption.
 Qed.
 
-(*
-Lemma types_valid_b__complete : forall (cst : cptcontext) (ts : list ty),
-    List.Forall (fun ftype => type_valid cst ftype) ts ->
-    types_valid_b cst ts = true.
-Proof.
-  intros cst ts. unfold types_valid_b.
-  induction ts as [| t ts' IHts'];
-    intros H.
-  - (* ts = nil *)
-    reflexivity.
-  - (* ts = t :: ts' *)
-    inversion H; subst.
-    simpl. rewrite -> andb_true_iff. split.
-    + apply type_valid_b__complete. assumption.
-    + apply IHts'. assumption.
-Qed.
-*)
-
-
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
 Module ty_DataOkProp <: DataOkProp ty_Data ty_DataOkDef ty_DataOkInterp.
@@ -257,22 +219,6 @@ End ty_DataOkProp.
 Module conceptProps := MIntrfs1Props 
                          ty_Intrfs1Base 
                          ty_DataOkDef ty_DataOkInterp ty_DataOkProp.
-
-(*
-Lemma types_valid_b__sound' : forall (cst : cptcontext) (ts : list ty),
-    types_valid_b' cst ts = true ->
-    types_valid' cst ts.
-Proof.
-  apply concept.types_ok_b__sound.
-Qed.
-
-Lemma types_valid_b__complete' : forall (cst : cptcontext) (ts : list ty),
-    types_valid'   cst ts ->
-    types_valid_b' cst ts = true.
-Proof.
-  apply conceptProps.types_ok_b__complete.
-Qed.
-*)
 
 (* ----------------------------------------------------------------- *)
 (** **** Concept Well-definedness *)
@@ -299,51 +245,7 @@ Proof.
   apply conceptProps.intrfs_ok_b__complete. assumption.
 Qed.
 
-
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
-
-
-
-
-
-(*
-
-(* ----------------------------------------------------------------- *)
-(** **** Concept Well-definedness *)
-(* ----------------------------------------------------------------- *)
-
-(** And the final steps to prove that [concept_well_defined_b]
-    is sound and complete. *)
-
-Theorem concept_well_defined_b__sound : forall (cst : cptcontext) (C : conceptdef),
-    concept_welldefined_b cst C = true ->
-    concept_welldefined   cst C.
-Proof.
-  intros cst C. intros H.
-  unfold concept_welldefined_b in H. destruct C.
-  unfold concept_welldefined.
-  destruct (split (map namedecl_to_pair n)).
-  rewrite -> andb_true_iff in H. inversion H as [Hid Hty].
-  apply ids_are_unique__sound in Hid.
-  apply types_valid_b__sound in Hty.
-  split; auto.
-Qed.
-
-Theorem concept_well_defined_b__complete : forall (cst : cptcontext) (C : conceptdef),
-    concept_welldefined   cst C ->
-    concept_welldefined_b cst C = true.
-Proof.
-  intros cst C. intros H.
-  unfold concept_welldefined_b.
-  unfold concept_welldefined in H.
-  destruct C. destruct (split (map namedecl_to_pair n)).
-  inversion H as [Hdup Htys].
-  rewrite -> andb_true_iff. split.
-  apply ids_are_unique__complete in Hdup. assumption.
-  apply types_valid_b__complete. assumption.
-Qed.
-
-*)
 
 (* ----------------------------------------------------------------- *)
 (** **** Concept Typing *)
@@ -543,95 +445,6 @@ Proof.
     apply IdMapProps.F.find_mapsto_iff.
     assumption.
 Qed.
-(*
-  (* unfold Equal *)
-  unfold IdLPM.IdMap.Equal.
-  intros y.
-  remember (map namedecl_to_pair nmtps) as pnds.
-  destruct (IdLPM.IdMap.find y CT) as [T|] eqn:Hfind.
-  - (* y in C *)
-    assert (Hmaps := Hfind).
-    rewrite <- IdMapProps.F.find_mapsto_iff in Hmaps.
-    assert (Hdup : NoDup (IdLPM.get_ids pnds)).
-    { apply split_fst__map_fst in Heq. subst.
-      assumption. }
-    pose proof (elem_in_map_eq_length__elem_in_list
-                  ty pnds y T CT H Hdup H5 Hmaps) as Hin.
-    assert (HCT' := H1).
-    rewrite Forall_forall in HCT'.
-    specialize (HCT' (y, T) Hin). simpl in HCT'.
-    rewrite <- HCT'. reflexivity.
-  - (* y not in C *)
-    
-
-  elem_in_map_eq_length__elem_in_list
-
-  destruct (
-
-  apply Equal_mapsto_iff.
-
-
-  remember (split (map namedecl_to_pair nmtps)) as pnds.
-  match goal with
-  |[ |- context[split (map namedecl_to_pair nmtps)]] => idtac
-  end.
-  rewrite <- Heqpnds at 3.
-  cases (split (map namedecl_to_pair nmtps)).
-
-
-  induction nmtps as [| nmtp nmtps' IHnmtps' ];
-    intros CT CT' HCT HCT';
-    unfold concept_has_type in *; propositional.
-  - (* nil *)
-    simpl in *. symmetry in H4, H5.
-    apply cardinal_Empty in H4. apply cardinal_Empty in H5.
-    unfold IdLPM.IdMap.Empty in *.
-(*    unfold IdLPM.IdMap.Proofs.Empty in H4, H5. *)
-    apply Equal_mapsto_iff.
-    intros k e. split; intros contra.
-    + unfold IdLPM.IdMap.MapsTo in contra. apply H4 in contra. contradiction.
-    + unfold IdLPM.IdMap.MapsTo in contra. apply H5 in contra. contradiction.
-  - (* nmtps = nmtp :: nmtps' *)
-    unfold concept_welldefined in H.
-    unfold conceptDefs.intrfs_ok in H.
-    destruct (split (map namedecl_to_pair (nmtp :: nmtps'))) 
-      as [fnames ftypes] eqn:Heq.
-    rewrite Heq in H at 1.
-    propositional.
-    apply split_fst__map_fst in Heq. subst.
-    remember (map namedecl_to_pair (nmtp :: nmtps')) as pnds.
-    apply F.Equal_mapsto_iff.
-    (* IdLPM.IdMap.MapsTo k e CT <-> IdLPM.IdMap.MapsTo k e CT' *)
-    intros k e. split; intros Hmaps;
-                  assert (Hin : List.In (k, e) pnds).
-    (* CT -> CT' *)
-    unfold conceptDefs.intrfs_ok in *.
-    destruct (split pnds) in H.
-    apply elem_in_map_eq_length__elem_in_list with (CT := CT).
-    subst pnds.
-    apply forall_namedecl__forall_pair. apply H3. assumption. 
-    subst. rewrite map_length. assumption.
-    assumption.
-    rewrite Forall_forall in H0.
-    subst. 
-    change (In (namedecl_to_pair (nm_decl k e)) (map namedecl_to_pair (nmtp :: nmtps'))) in Hin.
-    apply in_pair__in_namedecl in Hin.
-    specialize (H0 (nm_decl k e) Hin).
-    apply F.find_mapsto_iff. assumption.
-    (* CT' -> CT *)
-    apply elem_in_map_eq_length__elem_in_list with (CT := CT').
-    subst pnds.
-    apply forall_namedecl__forall_pair. apply H0. assumption. 
-    subst. rewrite map_length. assumption.
-    assumption.
-    rewrite Forall_forall in H3.
-    subst. 
-    change (In (namedecl_to_pair (nm_decl k e)) (map namedecl_to_pair (nmtp :: nmtps'))) in Hin.
-    apply in_pair__in_namedecl in Hin.
-    specialize (H3 (nm_decl k e) Hin).
-    apply F.find_mapsto_iff. assumption.
-Qed.    
-*)
 
 (* ----------------------------------------------------------------- *)
 
@@ -696,13 +509,6 @@ Forall_impl:
                   find_ty f (IdLPM.map_from_list (map namedecl_to_pair nds')) 
                   = Some T
               end).    
-(*
-      apply Forall_impl with (P := fun nmdecl : namedecl =>
-              match nmdecl with
-              | nm_decl f T =>
-                  find_ty f (IdLPM.map_from_list (map namedecl_to_pair nds')) = Some T
-              end).
-*)
       intros [f T] H.
       simpl.
       apply IdLPM.IdMap.find_2 in H.
@@ -722,9 +528,6 @@ Forall_impl:
       assumption.
   - (* length *)
     remember (map namedecl_to_pair nds) as pnds.
-(*    assert (Hlen : length pnds = length nds).
-    { subst pnds. rewrite map_length. reflexivity. }
-    rewrite -> Hlen. *)
     apply map_from_list__length_cardinal_eq.
     unfold concept_welldefined_b in HCdef.
     unfold conceptInterp.intrfs_ok_b in HCdef.
@@ -734,12 +537,6 @@ Forall_impl:
     apply ty_Intrfs1Base.IdLS.Props.ids_are_unique__sound in Huniq.
     apply split_fst__map_fst in Hpnds.
     subst. assumption.
-(*    unfold conceptDefs.intrfs_ok in Hsound.
-    destruct (split pnds) as [fnames ftypes] eqn:Hpnds. 
-    rewrite Hpnds in Hsound at 1.
-propositional.
-    apply split_fst__map_fst in Hpnds.
-    unfold IdLPM.get_ids. subst fnames. assumption.*)
 Qed.
 
 (** Here is the main [concept_type_check] completeness theorem. *)

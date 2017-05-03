@@ -380,10 +380,9 @@ Inductive type_valid (st : cptcontext) : ty -> Prop :=
 
 Hint Constructors type_valid. 
 
-
-
-
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+(** Here we are going to use MIntrfs1 generic module. *)
 
 Module ty_Data <: Data.
   Definition t := ty.
@@ -406,11 +405,6 @@ End ty_Intrfs1Base.
 
 Module conceptDefs := MIntrfs1Defs ty_Intrfs1Base ty_DataOkDef.
 
-(*
-Definition types_valid' (st : cptcontext) (ts : list ty) : Prop :=
-  intrfs1Defs.types_ok st ts.
-*)
-
 (** Now we are ready to define a property "concept is well defined" *)
 
 Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
@@ -421,29 +415,7 @@ Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
   end.
 Hint Unfold concept_welldefined.
 
-
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
-
-
-
-(*
-Definition types_valid (st : cptcontext) (ts : list ty) : Prop :=
-  List.Forall (fun ftype => type_valid st ftype) ts.
-Hint Unfold types_valid.
-
-(** Now we are ready to define a property "concept is well defined" *)
-
-Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
-  match C with
-    cpt_def cname cbody =>
-    let (fnames, ftypes) := split (map namedecl_to_pair cbody) in
-    (** all names are distinct *)
-    List.NoDup fnames
-    (** and all types are valid *)
-    /\ types_valid st ftypes             
-  end.
-Hint Unfold concept_welldefined.
-*)
 
 (** We have a symbol table for concepts, concept types, but
     we have not defined yet a relation on concept definitions and
