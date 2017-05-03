@@ -169,6 +169,19 @@ Module MIntrfs1Props
     apply types_ok_b__complete. assumption.
   Qed.
 
+  Theorem intrfs_ok__cons : forall (c : ctx) (ds : list (id * ty))
+                                   (nm : id) (tp : ty),
+      intrfs_ok c ((nm, tp) :: ds) ->
+      intrfs_ok c ds.
+  Proof.
+    intros c ds nm tp H.
+    unfold intrfs_ok in *. simpl in *.
+    destruct (split ds) as [nms tps] eqn:Heq.
+    propositional.
+    inversion H0. assumption.
+    inversion H1. assumption.
+  Qed.
+
 End MIntrfs1Props.
 
 

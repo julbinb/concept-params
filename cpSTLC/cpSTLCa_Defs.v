@@ -453,12 +453,13 @@ Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Pro
   (** concept def must be well-defined *)
   concept_welldefined cst C
   /\  match C  with cpt_def cname cbody =>
-      match CT with CTdef  cnmtys =>   
+      match CT with CTdef   cnmtys => 
+      let pnds := map namedecl_to_pair cbody in
   (** all concept members are reflected in a concept type *)      
-        List.Forall (fun nmdecl => match nmdecl with nm_decl f T =>
-                         find_ty f cnmtys = Some T end) cbody
+        List.Forall (fun pnd => match pnd with (f, T) =>
+                         find_ty f cnmtys = Some T end) pnds
   (** amount of concept members is the same as in the concept type *)
-        /\ List.length cbody = IdLPM.IdMap.cardinal cnmtys
+        /\ List.length pnds = IdLPM.IdMap.cardinal cnmtys
       end end.
 
 (** At this point we cannot do more on contexts. To check models,
