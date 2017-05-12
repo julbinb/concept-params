@@ -11,12 +11,14 @@ Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.SetMapLib.List2Set.
+Require Import ConceptParams.SetMapLib.ListPair2FMap.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
 
 Require Import Coq.Structures.Orders.
+Require Import Coq.Structures.Equalities.
 
 (* ***************************************************************** *)
 (** * Module-Interface 1 
@@ -62,13 +64,28 @@ End DataOkProp.
 (* ################################################################# *)
 
 Module Type Intrfs1Base.
-  Declare Module IdOT : UsualOrderedType.
-  Declare Module TyDT : Data.
-  Declare Module IdLS : List2Set IdOT.
+  Declare Module IdDT  : UsualDecidableType.
+  Declare Module IdSET : MSetInterface.WSets
+           with Definition E.t := IdDT.t
+           with Definition E.eq := IdDT.eq.
+  Declare Module IdLS  : List2MSet IdDT IdSET.
 
-  Definition id := IdOT.t.
+  Declare Module IdDT' : ListPair2FMap.UsualDecidableTypeOrig
+      with Definition t  := IdDT.t
+      with Definition eq := IdDT.eq.
+  Declare Module IdMAP : FMapInterface.WS 
+           with Definition E.t := IdDT.t
+           with Definition E.eq := IdDT.eq.
+  Declare Module IdLPM : ListPair2FMapW IdDT' IdMAP.
+
+  Declare Module TyDT  : Data.
+
+  Definition id := IdDT.t.
   Definition ty := TyDT.t.
   Definition ctx := TyDT.ctx.
+
+  Definition intrfs_ast := list (id * ty).
+  Definition intrfs_map := IdLPM.id_map ty.
 End Intrfs1Base.
 
 (* ################################################################# *)
@@ -87,6 +104,13 @@ Module MIntrfs1Defs (Import MIB : Intrfs1Base)
     List.NoDup nms
     (** and all types are valid *)
     /\ types_ok c tps. 
+
+  Definition intrfs_has_type (c : ctx) 
+             (Iast : intrfs_ast) (Imap : intrfs_map) : Prop :=
+    (* interface is well-defined *)
+    intrfs_ok c Iast
+    (* map is equal to ast *)
+    /\ IdLPM.eq_list_map Iast Imap.
 
 End MIntrfs1Defs.
 
@@ -107,6 +131,14 @@ Module MIntrfs1Interp (Import MIB : Intrfs1Base)
       (IdLS.ids_are_unique nms)
       (** and all types are valid *)
       (types_ok_b c tps).
+
+  Definition intrfs_type_check (c : ctx) 
+             (Iast : intrfs_ast) : option intrfs_map :=
+    (* if interface is well-defined *)
+    if intrfs_ok_b c Iast then
+      (* generate map from ast *)
+      Some (IdLPM.map_from_list Iast)
+    else None.
  
 End MIntrfs1Interp.
 
@@ -210,6 +242,78 @@ Module MIntrfs1Props
     apply IdLS.Props.ids_are_unique__cons with (x := nm); assumption.
     apply types_ok_b__complete.
     apply types_ok_b__sound in H1. inversion H1. assumption.
+  Qed.
+
+(* ----------------------------------------------------------------- *)
+(** *** Helper Props  *)
+(* ----------------------------------------------------------------- *)
+
+  Module Helper.
+
+    Lemma intrfs_has_type__iso :
+      forall (c : ctx) (Iast : intrfs_ast) (Imap1 Imap2 : intrfs_map),
+        intrfs_has_type c Iast Imap1 ->
+        intrfs_has_type c Iast Imap2 ->
+        IdLPM.IdMap.Equal Imap1 Imap2.
+    Proof.
+      intros c Iast Imap1 Imap2.
+      unfold intrfs_has_type.
+      intros [Hok Heq1] [Hok2 Heq2]. clear Hok2.
+      apply IdLPM.Props.eq_list_map__same_list__eq_maps with (ps := Iast);
+        assumption.
+    Qed.
+
+  End Helper.
+
+  Theorem eq__split_fst__map_fst : 
+    forall {A B : Type} (l : list (prod A B)) (xs : list A) (ys : list B),
+      split l = (xs, ys) -> 
+      map fst l = xs.
+  Proof.
+    intros A B l. induction l as [| h l' IHl'].
+    - (* l = nil *)
+      intros xs ys H. simpl in H. inversion H; subst.
+      reflexivity.
+    - (* l = h :: l' *)
+      intros xs ys H. destruct h eqn:eqh.
+      simpl in H. destruct (split l'). simpl. 
+      destruct xs as [| x xs']. destruct ys as [| y ys'].
+      + inversion H.
+      + inversion H.
+      + inversion H; subst. apply f_equal.
+        apply IHl' with (ys := l0). reflexivity.
+  Qed.
+
+  Theorem intrfs_type_check__sound :
+    forall (c : ctx) (Iast : intrfs_ast) (Imap : intrfs_map),  
+    intrfs_type_check c Iast = Some Imap ->
+    intrfs_has_type c Iast Imap.
+  Proof.
+    intros c ast mp H.
+    unfold intrfs_type_check, intrfs_has_type in *.
+    destruct (intrfs_ok_b c ast) eqn:Hok;
+    [ apply intrfs_ok_b__sound in Hok | idtac ];
+    split ; try inversion H.
+    - assumption.
+    - inversion H. subst. 
+      apply IdLPM.Props.eq_list_map_from_list. 
+      unfold intrfs_ok in *.
+      destruct (split ast) as [nms tps] eqn:Heq; subst.
+      inversion Hok as [Hdup Htypes].
+      apply eq__split_fst__map_fst in Heq. subst.
+      assumption.
+  Qed.
+
+  Theorem intrfs_type_check__complete :
+    forall (c : ctx) (Iast : intrfs_ast) (Imap Imap' : intrfs_map),  
+      intrfs_has_type c Iast Imap ->
+      intrfs_type_check c Iast = Some Imap' ->
+      IdLPM.IdMap.Equal Imap Imap'.
+  Proof.
+    intros c ast mp mp' Htype Hcheck.
+    apply intrfs_type_check__sound in Hcheck.
+    apply Helper.intrfs_has_type__iso with (c := c) (Iast := ast); 
+      assumption.
   Qed.
 
 End MIntrfs1Props.

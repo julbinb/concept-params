@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 27 Mar 2017
+   Last Update: Fri, 12 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -38,18 +38,21 @@ Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
 
+Require Import Coq.FSets.FMapInterface.
+
 Require Import Coq.omega.Omega.
 
 
 (** We will use list-2-set and list-pair-2-map machinery 
  ** when dealing with modules. *)
 
-(** [ListAsSet] module for [id] type of identifiers. *)
-Module IdLS := MList2SetAVL IdUOT.
+(** [List2MSet] module for [id] type of identifiers. *)
+Module IdLS' := MList2MSetAVL IdUOT.
+Module IdLS  := IdLS'.M.
 
-(** [ListAsSet] module for [id] type of identifiers. *)
+(** [ListPair2FMap] module for [id] type of identifiers. *)
 Module IdLPM' := MListPair2FMapAVL IdUOTOrig.
-Module IdLPM := IdLPM'.M. (*MListPair2MapAVL IdUOTOrig.*)
+Module IdLPM  := IdLPM'.M. (*MListPair2MapAVL IdUOTOrig.*)
 
 
 (* ################################################################# *)
@@ -394,13 +397,22 @@ Module ty_DataOkDef <: DataOkDef ty_Data.
 End ty_DataOkDef.
 
 Module ty_Intrfs1Base <: Intrfs1Base.
-  Module IdOT := IdLS.IdOT.
-  Module TyDT := ty_Data.
+  Module IdDT  := IdLS'.M.IdDT.
+  Module IdSET := IdLS'.IdSetAVL.
   Module IdLS := IdLS.
+
+  Module IdDT' := IdLPM'.M.IdDT. 
+  Module IdMAP := IdLPM'.IdMapAVL.
+  Module IdLPM := IdLPM.
+
+  Module TyDT := ty_Data.
 
   Definition id := id.
   Definition ty := ty.
   Definition ctx := cptcontext.
+
+  Definition intrfs_ast := list (id * ty).
+  Definition intrfs_map := IdLPM.id_map ty.
 End ty_Intrfs1Base.
 
 Module conceptDefs := MIntrfs1Defs ty_Intrfs1Base ty_DataOkDef.
