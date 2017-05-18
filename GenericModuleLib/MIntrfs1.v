@@ -63,13 +63,15 @@ End DataOkProp.
 (** ** Shared Parameters of all building blocks *)
 (* ################################################################# *)
 
-Module Type Intrfs1Base.
+Module Type IdentifiersBase.
+  (* Id Set *)
   Declare Module IdDT  : UsualDecidableType.
   Declare Module IdSET : MSetInterface.WSets
            with Definition E.t := IdDT.t
            with Definition E.eq := IdDT.eq.
   Declare Module IdLS  : List2MSet IdDT IdSET.
-
+  
+  (* Id Map *)
   Declare Module IdDT' : ListPair2FMap.UsualDecidableTypeOrig
       with Definition t  := IdDT.t
       with Definition eq := IdDT.eq.
@@ -78,14 +80,27 @@ Module Type Intrfs1Base.
            with Definition E.eq := IdDT.eq.
   Declare Module IdLPM : ListPair2FMapW IdDT' IdMAP.
 
-  Declare Module TyDT  : Data.
-
+  (* Id *)
   Definition id := IdDT.t.
+  (*Definition id_set := IdLS.id_set.*)
+End IdentifiersBase.
+
+Module Type IntrfsBase.
+  Include IdentifiersBase.
+
+  (* Types Data *)
+  Declare Module TyDT : Data.
   Definition ty := TyDT.t.
-  Definition ctx := TyDT.ctx.
 
   Definition intrfs_ast := list (id * ty).
   Definition intrfs_map := IdLPM.id_map ty.
+
+  Parameter members_to_define : intrfs_map -> list id.
+End IntrfsBase.
+
+Module Type Intrfs1Base.
+  Include IntrfsBase.
+  Definition ctx := TyDT.ctx.
 End Intrfs1Base.
 
 (* ################################################################# *)
@@ -320,234 +335,3 @@ End MIntrfs1Props.
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-(*
-Module Type HasWellDef <: Typ.
-
-  Include Typ.
-
-  Parameter is_welldef   : t -> Prop.
-  Parameter is_welldef_b : t -> bool.
-
-End HasWellDef.
-
-
-Module Type Concept1Base.
-
-  Declare Module IdOT : UsualOrderedType.
-  Declare Module TyWD : HasWellDef.
-  Declare Module IdLS : List2Set IdOT.
-
-  Definition id := IdOT.t.
-  Definition ty := TyWD.t.
-
-End Concept1Base.
-
-Module Type Concept1Defs (Import MCB : Concept1Base).
-
-  Parameter types_ok : list ty -> Prop.
-  Parameter concept_ok : list (id * ty) -> Prop.
-
-End Concept1Defs.
-
-Module Type Concept1Interp (Import MCB : Concept1Base).
-
-  Parameter types_ok_b : list ty -> bool.
-  Parameter concept_ok_b : list (id * ty) -> bool.
-
-End Concept1Interp.
-
-
-Module MConcept1Base
-       (id_UOT : UsualOrderedType)
-       (ty_WD  : HasWellDef)
-       (id_LS  : List2Set id_UOT)
-<: Concept1Base.
-
-  Module IdOT := id_UOT.
-  Module TyWD := ty_WD.
-  Module IdLS := id_LS.
-
-  Definition id := IdOT.t.
-  Definition ty := TyWD.t.
-
-End MConcept1Base.
-
-
-Module MConcept1Defs (Import MCB : Concept1Base).
-
-  Definition types_ok (tps : list ty) : Prop :=
-    List.Forall (fun tp => TyWD.is_welldef tp) tps.
-
-  Definition concept_ok (ds : list (id * ty)) : Prop :=
-    let (nms, tps) := split ds in
-    (** all names are distinct *)
-    List.NoDup nms
-    (** and all types are valid *)
-    /\ types_ok tps. 
-
-End MConcept1Defs.
-
-
-Module MConcept1Interp (Import MCB : Concept1Base).
-
-  Definition types_ok_b (tps : list ty) : bool :=
-    List.forallb (fun tp => TyWD.is_welldef_b tp) tps.
-
-  Definition concept_ok_b (ds : list (id * ty)) : bool :=
-    let (nms, tps) := split ds in
-    andb
-      (** all names are distinct *)
-      (IdLS.ids_are_unique nms)
-      (** and all types are valid *)
-      (types_ok_b tps).
- 
-End MConcept1Interp.
-
-
-Module MConcept1Props 
-       (Import MCB : Concept1Base)
-.
-  Module Import MCD := MConcept1Defs   MCB.
-  Module Import MCI := MConcept1Interp MCB.
-
-  Lemma types_ok_b__sound : forall (ts : list ty),
-        types_ok_b ts = true ->
-        types_ok ts.
-    Proof.
-      intros ts. unfold types_ok_b.
-      induction ts as [| tp ts'];
-        intros H.
-      - (* ts = nil *)
-        apply Forall_nil.
-      - (* ts = tp :: ts' *)
-        simpl in H. rewrite -> andb_true_iff in H.
-        inversion H as [Htp Hts']; clear H.
-        apply IHts' in Hts'. 
-        apply TyWD.is_welldef_b__sound in Htp.
-        apply Forall_cons; auto.
-    Qed.
-
-    Lemma types_ok_b__complete : forall (ts : list ty),
-        types_ok ts ->
-        types_ok_b ts = true.
-    Proof.
-      intros ts. unfold types_ok_b.
-      induction ts as [| tp ts' IHts'];
-        intros H.
-      - (* ts = nil *)
-        reflexivity.
-      - (* ts = tp :: ts' *)
-        inversion H; subst.
-        simpl. rewrite -> andb_true_iff. split.
-        + apply TyWD.is_welldef_b__complete. assumption.
-        + apply IHts'. assumption.
-    Qed.
-
-End MConcept1Props.
-
-(*
-Module MConcept1 
-       (id_UOT : UsualOrderedType)
-       (ty_WD  : HasWellDef)
-       (id_LS  : List2Set id_UOT)
-.
-
-  Module IdOT := id_UOT.
-  Module TyWD := ty_WD.
-  Module IdLS := id_LS.
-
-  Definition id := IdOT.t.
-  Definition ty := TyWD.t.
-
-  (*
-  Definition get_ids (xs : list (id * ty)) : list id 
-      := List.map fst xs.
-  *)
-
-(*  Module PropDefs. *)
-  
-    Definition types_ok (tps : list ty) : Prop :=
-      List.Forall (fun tp => TyWD.is_welldef tp) tps.
-
-    Definition concept_ok (ds : list (id * ty)) : Prop :=
-      let (nms, tps) := split ds in
-      (** all names are distinct *)
-      List.NoDup nms
-      (** and all types are valid *)
-      /\ types_ok tps.    
-
-(*  End PropDefs. *)
-
-
-(*  Module FunDefs. *)
-
-    Definition types_ok_b (tps : list ty) : bool :=
-      List.forallb (fun tp => TyWD.is_welldef_b tp) tps.
-
-    Definition concept_ok_b (ds : list (id * ty)) : bool :=
-      let (nms, tps) := split ds in
-      andb
-        (** all names are distinct *)
-        (IdLS.ids_are_unique nms)
-        (** and all types are valid *)
-        (types_ok_b tps).    
-
-(*  End FunDefs. *)
-
-
-(*  Module Props.
-    Import PropDefs.
-    Import FunDefs. *)
-    
-    Lemma types_ok_b__sound : forall (ts : list ty),
-        types_ok_b ts = true ->
-        types_ok ts.
-    Proof.
-      intros ts. unfold types_ok_b.
-      induction ts as [| tp ts'];
-        intros H.
-      - (* ts = nil *)
-        apply Forall_nil.
-      - (* ts = tp :: ts' *)
-        simpl in H. rewrite -> andb_true_iff in H.
-        inversion H as [Htp Hts']; clear H.
-        apply IHts' in Hts'. 
-        apply TyWD.is_welldef_b__sound in Htp.
-        apply Forall_cons; auto.
-    Qed.
-
-    Lemma types_ok_b__complete : forall (ts : list ty),
-        types_ok ts ->
-        types_ok_b ts = true.
-    Proof.
-      intros ts. unfold types_ok_b.
-      induction ts as [| tp ts' IHts'];
-        intros H.
-      - (* ts = nil *)
-        reflexivity.
-      - (* ts = tp :: ts' *)
-        inversion H; subst.
-        simpl. rewrite -> andb_true_iff. split.
-        + apply TyWD.is_welldef_b__complete. assumption.
-        + apply IHts'. assumption.
-    Qed.
-
-(*  End Props. *)
-
-  
-End MConcept1.
-*)
-*)

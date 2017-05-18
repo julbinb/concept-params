@@ -408,11 +408,17 @@ Module ty_Intrfs1Base <: Intrfs1Base.
   Module TyDT := ty_Data.
 
   Definition id := id.
+  (*Definition id_set := IdLS.id_set.*)
+
   Definition ty := ty.
   Definition ctx := cptcontext.
 
   Definition intrfs_ast := list (id * ty).
   Definition intrfs_map := IdLPM.id_map ty.
+
+  (* All members of an interface have to be defined *)
+  Definition members_to_define (imap : intrfs_map) : list id :=
+    map fst (IdLPM.IdMap.elements imap).
 End ty_Intrfs1Base.
 
 Module conceptDefs := MIntrfs1Defs ty_Intrfs1Base ty_DataOkDef.
