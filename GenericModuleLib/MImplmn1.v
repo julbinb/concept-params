@@ -1,8 +1,9 @@
 (* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 (* Module with Certified Checking 
-   of the simplest module-interface.
+   of the module-implementation 
+     where members can refer to the previously defined members.
   
-   Last Update: Wed, 3 May 2017
+   Last Update: Fri, 19 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 Add LoadPath "../..".
@@ -25,12 +26,14 @@ Require Import Coq.Structures.Equalities.
 (* ***************************************************************** *)
 (** * Module-Implementation 1 
 
-      The Simplest Semantics of Modules *)
+      A simple semantics of implementation modules. *)
 
 (** Module-Implementation is well-defined with respect to
-    if
-    all names are different 
-    and all types are well-defined. *)
+    the interface if : 
+    * all names are different; 
+    * all members are well-defined, with members being able
+      to refer to the previously defined members;
+    * all members required by the interface are defined. *)
 (* ***************************************************************** *)
 (* ***************************************************************** *)
 
@@ -38,25 +41,28 @@ Require Import Coq.Structures.Equalities.
 (** ** Module Types defining Parameters *)
 (* ################################################################# *)
 
+(** Data which might depend on some local context. *)
 Module Type DepData.  
-  (* contains types [t] and [ctx] *)
+  (** Contains types [t] and [ctx] *)
   Include Data. 
 
-  (** Type of Local Context *)
-  Parameter ctx_local : Type.
+  (** Type of local context which might be
+      required for checking a  *)
+  Parameter ctxloc : Type.
 End DepData.
 
 Module Type DepDataOkDef (Import D : DepData) 
        (Import MI : IntrfsBase).
-  (* element is ok on its own, 
-   * and it also corresponds to the interface *)
-  Parameter is_ok : ctx -> intrfs_map -> ctx_local -> 
+  (* Element [id] = [t] must be ok with respect 
+     to global [ctx] and local [ctxloc] contexts, and it also should 
+     correspond to the interface represented by [intrfs_map] *) 
+  Parameter is_ok : ctx -> intrfs_map -> ctxloc -> 
                     id -> t -> Prop.
 End DepDataOkDef.
 
 Module Type DepDataOkInterp (Import D : DepData)
        (Import MI : IntrfsBase).
-  Parameter is_ok_b : ctx -> intrfs_map -> ctx_local -> 
+  Parameter is_ok_b : ctx -> intrfs_map -> ctxloc -> 
                       id -> t -> bool.
 End DepDataOkInterp.
 
@@ -65,12 +71,12 @@ Module Type DepDataOkProp (Import D : DepData)
        (Import DDef : DepDataOkDef D MI) (Import DInt : DepDataOkInterp D MI).
 
   Axiom is_ok_b__sound : 
-    forall (c : ctx) (imap : MI.intrfs_map) (cl : ctx_local)
+    forall (c : ctx) (imap : MI.intrfs_map) (cl : ctxloc)
            (nm : id) (x : t),
       is_ok_b c imap cl nm x = true -> is_ok c imap cl nm x.
 
   Axiom is_ok_b__complete : 
-    forall (c : ctx) (imap : MI.intrfs_map) (cl : ctx_local) 
+    forall (c : ctx) (imap : MI.intrfs_map) (cl : ctxloc) 
            (nm : id) (x : t),
       is_ok c imap cl nm x -> is_ok_b c imap cl nm x = true.
 End DepDataOkProp.
@@ -96,12 +102,12 @@ Module Type Implmn1Base (Import MI : IntrfsBase).
 
   Definition ctx := TmDT.ctx.
 
-  Definition ctx_local := TmDT.ctx_local.
+  Definition ctxloc := TmDT.ctxloc.
   (** Initial local context *)
-  Parameter ctxl_init : ctx_local.
+  Parameter ctxl_init : ctxloc.
   (** Update local context *)
-  Parameter upd_ctx_local : ctx_local -> ctx -> intrfs_map -> 
-                            id -> tm -> ctx_local.
+  Parameter upd_ctxloc : ctxloc -> ctx -> intrfs_map -> 
+                            id -> tm -> ctxloc.
 End Implmn1Base.
 
 (* ################################################################# *)
@@ -113,37 +119,43 @@ Module MImplmn1Defs
        (Import MIB : Implmn1Base MI) 
        (Import TOkD : DepDataOkDef MIB.TmDT MI).
 
-  Definition process_dep_member
-             (c : ctx) (imap : intrfs_map)
-             (okAndCl : Prop * ctx_local) (def : id * tm) 
-  : Prop * ctx_local :=
-    match okAndCl with (ok_prop, cl) =>
-    match def with (nm, t) =>
-      let ok_prop' := 
-          (* check curr member in the local context *)
-          TOkD.is_ok c imap cl nm t  
-          (* and preserve previous members' part *)
-          /\ ok_prop in
-      (* update local context *)
-      let cl' := MIB.upd_ctx_local cl c imap nm t in
-      (ok_prop', cl')
-    end end.
+  Module HelperD.
 
-  (** [initP] could be any provable proposition.
+    (** Aux function checking one member (to be used in [fold_left]).
+        The [okAndCl] param is an accumulator. *)
+    Definition process_dep_member
+               (c : ctx) (imap : intrfs_map)
+               (okAndCl : Prop * ctxloc) (def : id * tm) 
+    : Prop * ctxloc 
+      := match okAndCl with (ok_prop, cl) =>
+         match def with (nm, t) =>
+         let ok_prop' := 
+             (* check curr member in the local context *)
+             TOkD.is_ok c imap cl nm t  
+             (* and preserve previous members' part *)
+             /\ ok_prop in
+         (* update local context *)
+         let cl' := MIB.upd_ctxloc cl c imap nm t in
+         (ok_prop', cl')
+         end end.
+
+    (** [initP] could be any provable proposition.
       This is more convenient for doing proofs than 
         using [True] as initial proposition, for example. *)
-  Definition terms_ok' 
-             (c : ctx) (imap : intrfs_map) (cl : ctx_local) (initP : Prop)
-             (defs : list (id * tm)) : Prop * ctx_local :=
-    List.fold_left
-      (process_dep_member c imap)
-      defs
-      (initP, cl).
+    Definition terms_ok' 
+               (c : ctx) (imap : intrfs_map) (cl : ctxloc) (initP : Prop)
+               (defs : list (id * tm)) : Prop * ctxloc :=
+      List.fold_left
+        (process_dep_member c imap)
+        defs
+        (initP, cl).
+
+  End HelperD.
 
   Definition terms_ok 
              (c : ctx) (imap : intrfs_map) 
              (defs : list (id * tm)) : Prop :=
-    fst (terms_ok' c imap ctxl_init True defs).
+    fst (HelperD.terms_ok' c imap ctxl_init True defs).
 
 
   Definition implmn_ok 
@@ -169,21 +181,21 @@ Module MImplmn1Interp
   
   Definition process_dep_member_b 
              (c : ctx) (imap : intrfs_map)
-             (okAndCl : bool * ctx_local) (def : id * tm) 
-  : bool * ctx_local :=
+             (okAndCl : bool * ctxloc) (def : id * tm) 
+  : bool * ctxloc :=
     match okAndCl with 
     | (true, cl) =>
       match def with (nm, t) =>
         let ok := TOkI.is_ok_b c imap cl nm t in
-        let cl' := MIB.upd_ctx_local cl c imap nm t in
+        let cl' := MIB.upd_ctxloc cl c imap nm t in
         (ok, cl')
       end 
     | (false, cl) => (false, cl)
     end.
 
   Definition terms_ok'_b 
-             (c : ctx) (imap : intrfs_map) (cl : ctx_local)
-             (defs : list (id * tm)) : bool * ctx_local :=
+             (c : ctx) (imap : intrfs_map) (cl : ctxloc)
+             (defs : list (id * tm)) : bool * ctxloc :=
     List.fold_left
       (process_dep_member_b c imap)
       defs
@@ -227,11 +239,13 @@ Module MImplmn1Props
 
   Module Helper.
 
+    Import MID.HelperD.
+
     (** Soundness *)   
 
     Lemma process_dep_member_b_preserves_false :
       forall (c : ctx) (imap : intrfs_map)
-             (ds : list (id * tm)) (cl : ctx_local),
+             (ds : list (id * tm)) (cl : ctxloc),
         fold_left (process_dep_member_b c imap) ds (false, cl) = (false, cl).
     Proof.
       intros c imap ds.
@@ -245,10 +259,10 @@ Module MImplmn1Props
 
     Lemma terms_ok'_b_cons_true :
       forall (c : ctx) (imap : intrfs_map)
-             (ds : list (id * tm)) (cl : ctx_local)
+             (ds : list (id * tm)) (cl : ctxloc)
              (nm : id) (t : tm),
         fst (terms_ok'_b c imap cl ((nm, t) :: ds)) = true ->
-        fst (terms_ok'_b c imap (upd_ctx_local cl c imap nm t) ds) = true.
+        fst (terms_ok'_b c imap (upd_ctxloc cl c imap nm t) ds) = true.
     Proof.
       intros c imap ds.
       unfold terms_ok'_b. simpl.
@@ -265,7 +279,7 @@ Module MImplmn1Props
 
     Lemma terms_ok'_b_true__head_ok :
       forall (c : ctx) (imap : intrfs_map)
-             (ds : list (id * tm)) (cl : ctx_local)
+             (ds : list (id * tm)) (cl : ctxloc)
              (nm : id) (t : tm),
         fst (terms_ok'_b c imap cl ((nm, t) :: ds)) = true ->
         is_ok_b c imap cl nm t = true.
@@ -280,7 +294,7 @@ Module MImplmn1Props
 
     Lemma terms_ok'_b__sound :
       forall (c : ctx) (imap : intrfs_map)
-             (defs : list (id * tm)) (cl : ctx_local) (initP : Prop),
+             (defs : list (id * tm)) (cl : ctxloc) (initP : Prop),
         initP ->
         fst (terms_ok'_b c imap cl defs) = true ->
         fst (terms_ok' c imap cl initP defs).
@@ -308,7 +322,7 @@ Module MImplmn1Props
 
     Lemma terms_ok'__fst_prop :
       forall (c : ctx) (imap : intrfs_map)
-             (ds : list (id * tm)) (cl : ctx_local) (initP : Prop)
+             (ds : list (id * tm)) (cl : ctxloc) (initP : Prop)
              (nm : id) (t : tm),
       exists Ps : Prop,
         (fst (terms_ok' c imap cl initP ((nm, t) :: ds)) = Ps)
@@ -323,10 +337,10 @@ Module MImplmn1Props
         tauto.
       - (* ds = (dnm, dt) :: ds' *)
         replace (fst (terms_ok' c imap cl P ((nm, t) :: (dnm, dt) :: ds')))
-        with (fst (terms_ok' c imap (upd_ctx_local cl c imap nm t) 
+        with (fst (terms_ok' c imap (upd_ctxloc cl c imap nm t) 
                              (is_ok c imap cl nm t /\ P) ((dnm, dt) :: ds')))
           by (unfold terms_ok'; reflexivity).
-        remember (upd_ctx_local cl c imap nm t) as cl'.      
+        remember (upd_ctxloc cl c imap nm t) as cl'.      
         specialize (IHds' cl' (is_ok c imap cl nm t /\ P) dnm dt).
         inversion IHds' as [Ps HPs].
         inversion HPs as [Heq Himp].
@@ -336,7 +350,7 @@ Module MImplmn1Props
 
     Lemma terms_ok'__head_ok :
       forall (c : ctx) (imap : intrfs_map)
-             (ds : list (id * tm)) (cl : ctx_local) (initP : Prop)
+             (ds : list (id * tm)) (cl : ctxloc) (initP : Prop)
              (nm : id) (t : tm),
         initP ->
         fst (terms_ok' c imap cl initP ((nm, t) :: ds)) ->
@@ -351,7 +365,7 @@ Module MImplmn1Props
 
     Lemma terms_ok'_b__complete :
       forall (c : ctx) (imap : intrfs_map)
-             (defs : list (id * tm)) (cl : ctx_local) (initP : Prop),
+             (defs : list (id * tm)) (cl : ctxloc) (initP : Prop),
         initP ->
         fst (terms_ok' c imap cl initP defs) ->
         fst (terms_ok'_b c imap cl defs) = true.
@@ -365,7 +379,7 @@ Module MImplmn1Props
         apply terms_ok'__head_ok in H'.
         inversion H' as [Hok _].
         assert (Hok' := Hok). apply TOkP.is_ok_b__complete in Hok'.
-        remember (upd_ctx_local cl c imap nm t) as cl'.
+        remember (upd_ctxloc cl c imap nm t) as cl'.
         replace (terms_ok'_b c imap cl ((nm, t) :: ds'))
         with (terms_ok'_b c imap cl' ds')
           by (unfold terms_ok'_b; simpl; subst cl'; rewrite Hok'; reflexivity).

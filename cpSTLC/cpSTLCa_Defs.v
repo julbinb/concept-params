@@ -384,6 +384,8 @@ Inductive type_valid (st : cptcontext) : ty -> Prop :=
 Hint Constructors type_valid. 
 
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+(** This part is using GenericModulesLib  *)
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
 (** Here we are going to use MIntrfs1 generic module. *)
 
@@ -440,6 +442,8 @@ Hint Unfold concept_welldefined.
     concept types. *)
 
 Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Prop :=
+  
+
   (** concept def must be well-defined *)
   concept_welldefined cst C
   /\  match C  with cpt_def cname cbody =>

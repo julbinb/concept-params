@@ -121,11 +121,11 @@ Module MIntrfs1Defs (Import MIB : Intrfs1Base)
     /\ types_ok c tps. 
 
   Definition intrfs_has_type (c : ctx) 
-             (Iast : intrfs_ast) (Imap : intrfs_map) : Prop :=
+             (iast : intrfs_ast) (imap : intrfs_map) : Prop :=
     (* interface is well-defined *)
-    intrfs_ok c Iast
+    intrfs_ok c iast
     (* map is equal to ast *)
-    /\ IdLPM.eq_list_map Iast Imap.
+    /\ IdLPM.eq_list_map iast imap.
 
 End MIntrfs1Defs.
 
