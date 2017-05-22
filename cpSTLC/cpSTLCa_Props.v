@@ -210,6 +210,8 @@ Proof.
 Qed.
 
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+(** This part is using GenericModulesLib  *)
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
 Module ty_DataOkProp <: DataOkProp ty_Data ty_DataOkDef ty_DataOkInterp.
   Definition is_ok_b__sound := type_valid_b__sound.
@@ -245,21 +247,14 @@ Proof.
   apply conceptProps.intrfs_ok_b__complete. assumption.
 Qed.
 
-(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
-
 (* ----------------------------------------------------------------- *)
 (** **** Concept Typing *)
 (* ----------------------------------------------------------------- *)
 
 (** Now we want to prove that the function [concept_type_check] 
-  * is sound and complete. *)
+    is sound and complete. *)
 
-(** Similarly to IdSets, we need some auxiliary 
-  * lemmas to connect AVL maps with lists presenting AST. *)
-
-(*
-
-*)
+(** For this, we are going to use the list-map machinery of IdLPM. *)
 
 Module IdLPMProps := IdLPM.Props.
 Module IdMapFacts := FMapFacts.WFacts IdLPM.IdMap.
@@ -291,122 +286,6 @@ Qed.
 
 (* ----------------------------------------------------------------- *)
 
-Lemma concept_welldefined_b__cons :
-  forall (cst : cptcontext) (Cnm : id) (nd : namedecl) (nds : list namedecl),
-    concept_welldefined_b cst (cpt_def Cnm (nd :: nds)) = true ->
-    concept_welldefined_b cst (cpt_def Cnm nds) = true.
-Proof.
-  intros cst Cnm nd nds H.
-  simpl in *. unfold conceptInterp.intrfs_ok_b in *.
-  destruct (namedecl_to_pair nd) as [nm tp]. simpl in *.
-  destruct (split (map namedecl_to_pair nds)) as [fnames' ftypes'] eqn:Heq.
-  rewrite Heq at 1. rewrite Heq in H at 1.
-  apply andb_true_iff.
-  apply andb_true_iff in H.
-  propositional.
-  apply ids_are_unique__sound in H0. 
-    inversion H0. apply ids_are_unique__complete in H4.
-    assumption.
-  simpl in H1.  
-    apply andb_true_iff in H1; propositional.
-Qed.
-
-Lemma concept_welldefined__cons : 
-  forall (cst : cptcontext) (Cnm : id) (nd : namedecl) (nds : list namedecl),
-    concept_welldefined cst (cpt_def Cnm (nd :: nds)) ->
-    concept_welldefined cst (cpt_def Cnm nds).
-Proof.
-  intros cst Cnm nd nds. simpl.
-  unfold conceptDefs.intrfs_ok.
-  simpl in *. 
-  destruct (split (map namedecl_to_pair nds)) as [fnames' ftypes'] eqn:Heq.
-  rewrite Heq at 1. 
-  destruct (namedecl_to_pair nd) as [nm tp]. simpl.  
-  rewrite Heq at 1.
-  intros H.
-  propositional.
-  inversion H0. assumption.  
-  inversion H1; propositional.
-Qed.
-
-(* ----------------------------------------------------------------- *)
-
-(** As our IdLPM framework works with list of pairs, and
-    our syntax tree contains [namedecl] instead of pairs,
-    we need a way to convert [namedecl] to pair. *)
-
-Definition namedecl_prop (P : id -> ty -> Prop) :=
-  fun nmdecl : namedecl => 
-    match nmdecl with 
-    | nm_decl f T => P f T 
-    end. 
-Definition namedecl_pair_prop (P : id -> ty -> Prop) :=
-  fun pnd : id * ty => 
-    match pnd with 
-    | (f, T) => P f T 
-    end.
-
-Lemma namedecl_prop__pair : 
-  forall (P : id -> ty -> Prop) (nd : namedecl),
-    namedecl_prop P nd ->
-    namedecl_pair_prop P (namedecl_to_pair nd).
-Proof.
-  intros P nd H. destruct nd as [f T].
-  simpl. assumption.
-Qed.
-Lemma pair_prop__namedecl : 
-  forall (P : id -> ty -> Prop) (nd : namedecl),
-    namedecl_pair_prop P (namedecl_to_pair nd) ->
-    namedecl_prop P nd.
-Proof.
-  intros P nd H. destruct nd as [f T].
-  simpl in *. assumption.
-Qed.
-
-Lemma forall_namedecl__forall_pair : 
-  forall (P : id -> ty -> Prop) (nds : list namedecl),
-    Forall (namedecl_prop P) nds ->
-    Forall (namedecl_pair_prop P) (map namedecl_to_pair nds).
-Proof.
-  intros P nds. induction nds as [| nd nds' IHnds'].
-  - intros _. simpl. constructor.
-  - intros H. inversion H; subst. 
-    simpl. constructor.
-    apply namedecl_prop__pair; assumption.
-    apply IHnds'; assumption.
-Qed.
-Lemma forall_pair__forall_namedecl : 
-  forall (P : id -> ty -> Prop) (nds : list namedecl),
-    Forall (namedecl_pair_prop P) (map namedecl_to_pair nds) ->
-    Forall (namedecl_prop P) nds.
-Proof.
-  intros P nds. induction nds as [| nd nds' IHnds'].
-  - intros _. simpl. constructor.
-  - intros H. inversion H; subst. 
-    simpl. constructor.
-    apply pair_prop__namedecl; assumption.
-    apply IHnds'; assumption.
-Qed.
-
-Lemma in_pair__in_namedecl : 
-  forall (nds : list namedecl) (nd : namedecl),
-    In (namedecl_to_pair nd) (map namedecl_to_pair nds) ->
-    In nd nds.
-Proof.
-  intros nds. induction nds as [| nd' nds' IHnds'].
-  - intros nd H. inversion H. 
-  - intros nd H. 
-    simpl. simpl in H. 
-    inversion H as [H' | H'].
-    + left. unfold namedecl_to_pair in H'. 
-      cases nd'. cases nd. subst. 
-      inversion H'. subst. reflexivity.
-    + right.    
-      auto.
-Qed.
-
-(* ----------------------------------------------------------------- *)
-
 Lemma concept_has_type_iso : 
   forall (cst : cptcontext) (C : conceptdef) (CT CT' : id_ty_map),  
     concept_has_type cst C (CTdef CT) ->
@@ -418,31 +297,12 @@ Proof.
   unfold concept_has_type.
   unfold concept_welldefined, conceptDefs.intrfs_ok.
   destruct (split (map namedecl_to_pair nmtps)) as [nms tps] eqn:Heq.
+  (* For some reason, just [rewrite] cannot handle [split (map ...)] *)
   intros CT CT'.
   rewrite Heq at 1. rewrite Heq at 1.
-  intros HCT HCT'.
-  propositional.
-  apply Equal_mapsto_iff.
-  remember (map namedecl_to_pair nmtps) as pnds.
-  assert (Hdup : NoDup (IdLPM.get_ids pnds)).
-  { apply split_fst__map_fst in Heq. subst.
-    assumption. }
-  intros k T. split; intros Hmaps.
-  - (* CT -> CT'*)    
-    pose proof (elem_in_map_eq_length__elem_in_list
-                  ty pnds k T CT H Hdup H5 Hmaps) as Hin.
-    assert (HCT' := H1).
-    rewrite Forall_forall in HCT'.
-    specialize (HCT' (k, T) Hin). simpl in HCT'.
-    apply IdMapProps.F.find_mapsto_iff.
-    assumption.
-  - (* CT' -> CT *)
-    pose proof (elem_in_map_eq_length__elem_in_list
-                  ty pnds k T CT' H1 Hdup H7 Hmaps) as Hin.
-    assert (HCT := H).
-    rewrite Forall_forall in HCT.
-    specialize (HCT (k, T) Hin). simpl in HCT.
-    apply IdMapProps.F.find_mapsto_iff.
+  intros HCT HCT'. propositional.
+  apply IdLPM.Props.eq_list_map__same_list__eq_maps
+  with (ps := map namedecl_to_pair nmtps);
     assumption.
 Qed.
 
@@ -463,80 +323,28 @@ Proof.
       simplify; try solve_by_invert ].  
   (* C welldefined_b -> concept_has_type *)
   destruct C as [Cnm nds]. 
-  intros H. inversion H; subst. clear H.
+  intros H. inversion H; clear H H1.
   pose proof (concept_well_defined_b__sound cst _ HCdef) as Hsound.
-  (*unfold concept_welldefined, conceptDefs.intrfs_ok in Hsound.
-  destruct (split (map namedecl_to_pair nds)) as [nms tps] eqn:Heq.
-  Show Proof.
-  rewrite Heq in Hsound at 1.
-*)
   unfold concept_has_type. split.
   (* concept_welldefined *) 
   assumption.
-  (* all types are presented and valid,
-   * and length is correct *)
-  unfold concept_welldefined (*, concept_welldefined_b *) in *.
-  split. 
-  - (* forall find_ty*)
-    induction nds as [| d nds' IHnds']. 
-    apply Forall_nil.
-    (* Forall_cons *)
-    destruct d; simpl in HCdef.
-    unfold conceptInterp.intrfs_ok_b in *.
-    remember (map namedecl_to_pair nds') as pnds'. simpl in *.
-    destruct (split pnds') as [nms tps] eqn:eqpnds'.
-    rewrite eqpnds' in HCdef at 1.
-    rewrite andb_true_iff in HCdef. inversion HCdef as [Huniq Hvalid].
-    clear HCdef.
-    apply ids_are_unique__sound in Huniq. 
-    apply Forall_cons(*; destruct d; simpl in HCdef*).
-    + (* head *)
-      simpl. apply map_from_list__find_cons___true.
-      (* ~ List.In i (map fst (map namedecl_to_pair nds')) *)
-      inversion Huniq; subst.
-      replace (IdLPM.get_ids (map namedecl_to_pair nds')) with nms.
-      assumption. 
-      apply split_fst__map_fst in eqpnds'. auto.
-(*
-Forall_impl:
-  forall (A : Type) (P Q : A -> Prop),
-  (forall a : A, P a -> Q a) -> forall l : list A, Forall P l -> Forall Q l
- *)
-    + (* tail *)
-      subst.
-      apply Forall_impl with (P := fun pnd : id * ty =>
-              match pnd with (f, T) =>
-                  find_ty f (IdLPM.map_from_list (map namedecl_to_pair nds')) 
-                  = Some T
-              end).    
-      intros [f T] H.
-      simpl.
-      apply IdLPM.IdMap.find_2 in H.
-      apply IdLPM.IdMap.find_1. 
-      apply map_from_list_cons__preserves_mapping. assumption.
-      (* forall implication *)
-      inversion Huniq; subst; simpl in *.
-      apply IHnds'.
-      (* bool -> prop *)
-      unfold conceptInterp.intrfs_ok_b.
-      rewrite eqpnds' at 1.
-      apply andb_true_iff; split.
-      apply ids_are_unique__complete. assumption.
-      apply andb_true_iff in Hvalid. inversion Hvalid; auto.
-      (* prop -> bool *)
-      apply conceptProps.intrfs_ok__cons with (nm := i) (tp := t).
-      assumption.
-  - (* length *)
-    remember (map namedecl_to_pair nds) as pnds.
-    apply map_from_list__length_cardinal_eq.
-    unfold concept_welldefined_b in HCdef.
-    unfold conceptInterp.intrfs_ok_b in HCdef.
-    destruct (split pnds) as [fnames ftypes] eqn:Hpnds. subst.
-    rewrite Hpnds in HCdef at 1.
-    apply andb_true_iff in HCdef. inversion HCdef as [Huniq _].
-    apply ty_Intrfs1Base.IdLS.Props.ids_are_unique__sound in Huniq.
-    apply split_fst__map_fst in Hpnds.
-    subst. assumption.
+  (* eq_list_map *)
+  apply eq_list_map_from_list.
+  (* For some reason, the following does not work: *)
+  (*
+    unfold concept_welldefined in Hsound.
+    unfold conceptDefs.intrfs_ok in Hsound.
+    destruct (split (map namedecl_to_pair nds)) as [nms tps] eqn:Heq.
+    rewrite Heq in Hsound at 1.
+  *)
+  (* So we do a bit roundabout proof... *)
+  unfold concept_welldefined_b in *.
+  unfold conceptInterp.intrfs_ok_b in *.
+  destruct (split (map namedecl_to_pair nds)) as [nms tps] eqn:Heq.
+  rewrite Heq in HCdef at 1. 
+  rewrite andb_true_iff in HCdef. inversion HCdef as [Hun Hok].
+  apply IdLS.Props.ids_are_unique__sound in Hun.
+  apply split_fst__map_fst in Heq. subst. assumption.
 Qed.
 
 (** Here is the main [concept_type_check] completeness theorem. *)
@@ -554,6 +362,8 @@ Proof.
 Qed.
 
 End IdMapProofs.
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
 
 (* ================================================================= *)
@@ -634,32 +444,6 @@ Proof.
     tauto.
 Qed.
 
-
-
-
-(*
-Lemma mem_add_permute : forall (x y z : id) (s : id_set),
-    ids_mem x (ids_add y (ids_add z s))
-    = ids_mem x (ids_add z (ids_add y s)).
-Proof.
-  intros x y z s.
-  destruct (ids_mem x (ids_add y (ids_add z s))) eqn:Hmem.
-  - (* mem x (add y (add z s)) = true *)
-    symmetry.
-    apply mem_true__add_permute. assumption.
-  - (* mem x (add y (add z s)) = false *)
-    apply not_mem_iff in Hmem. unfold not in Hmem.
-    symmetry. apply not_mem_iff.
-    intros Hin. apply id_set_In__add_permute in Hin.
-    apply Hmem in Hin; inversion Hin.
-Qed.
-
-(** [id_list_to_id_set] builds set from a list of ids. *)
-
-Definition id_list_to_id_set (l : list id) :=
-  fold_left (fun acc x => ids_add x acc) l ids_empty.
-
-*)
 
 
 (* ################################################################# *)

@@ -110,17 +110,26 @@ End Intrfs1Base.
 Module MIntrfs1Defs (Import MIB : Intrfs1Base) 
        (Import TOkD : DataOkDef MIB.TyDT).
 
-  Definition types_ok (c : ctx) (tps : list ty) : Prop :=
-    List.Forall (fun tp => is_ok c tp) tps.
+  Module HelperD.
 
+    (** Aux definition "all types in a list are ok" *)
+    Definition types_ok (c : ctx) (tps : list ty) : Prop :=
+      List.Forall (fun tp => is_ok c tp) tps.
+
+  End HelperD.
+
+  (** Interface given as an AST [ds] is well-defined 
+   ** in the context [c] *)
   Definition intrfs_ok (c : ctx) (ds : list (id * ty)) : Prop :=
     let (nms, tps) := split ds in
     (** all names are distinct *)
     List.NoDup nms
     (** and all types are valid *)
-    /\ types_ok c tps. 
+    /\ HelperD.types_ok c tps. 
 
-  Definition intrfs_has_type (c : ctx) 
+  (** The finite map [imap] corresponds to the given well-defined
+   ** AST [iast] of an interface *)
+  Definition intrfs_ast_has_eq_map (c : ctx) 
              (iast : intrfs_ast) (imap : intrfs_map) : Prop :=
     (* interface is well-defined *)
     intrfs_ok c iast
@@ -136,23 +145,31 @@ End MIntrfs1Defs.
 Module MIntrfs1Interp (Import MIB : Intrfs1Base) 
        (Import TOkI : DataOkInterp MIB.TyDT).
 
-  Definition types_ok_b (c : ctx) (tps : list ty) : bool :=
-    List.forallb (fun tp => is_ok_b c tp) tps.
+  Module HelperI.
 
+    Definition types_ok_b (c : ctx) (tps : list ty) : bool :=
+      List.forallb (fun tp => is_ok_b c tp) tps.
+
+  End HelperI.
+
+  (** Checks that an interface given as an AST [ds]  
+   ** is well-defined in the context [c] *)
   Definition intrfs_ok_b (c : ctx) (ds : list (id * ty)) : bool :=
     let (nms, tps) := split ds in
     andb
       (** all names are distinct *)
       (IdLS.ids_are_unique nms)
       (** and all types are valid *)
-      (types_ok_b c tps).
+      (HelperI.types_ok_b c tps).
 
-  Definition intrfs_type_check (c : ctx) 
-             (Iast : intrfs_ast) : option intrfs_map :=
+  (** If an interface with the AST [iast] is well-defined,  
+   ** converts it to the equal finite map *)
+  Definition intrfs_ast_to_eq_map (c : ctx) 
+             (iast : intrfs_ast) : option intrfs_map :=
     (* if interface is well-defined *)
-    if intrfs_ok_b c Iast then
+    if intrfs_ok_b c iast then
       (* generate map from ast *)
-      Some (IdLPM.map_from_list Iast)
+      Some (IdLPM.map_from_list iast)
     else None.
  
 End MIntrfs1Interp.
@@ -169,6 +186,7 @@ Module MIntrfs1Props
 .
   Module Import MID := MIntrfs1Defs   MIB TOkD.
   Module Import MII := MIntrfs1Interp MIB TOkI.
+  Import MID.HelperD. Import MII.HelperI.
 
   Lemma types_ok_b__sound : forall (c : ctx) (ts : list ty),
       types_ok_b c ts = true ->
@@ -265,14 +283,14 @@ Module MIntrfs1Props
 
   Module Helper.
 
-    Lemma intrfs_has_type__iso :
+    Lemma intrfs_ast_has_eq_map__iso :
       forall (c : ctx) (Iast : intrfs_ast) (Imap1 Imap2 : intrfs_map),
-        intrfs_has_type c Iast Imap1 ->
-        intrfs_has_type c Iast Imap2 ->
+        intrfs_ast_has_eq_map c Iast Imap1 ->
+        intrfs_ast_has_eq_map c Iast Imap2 ->
         IdLPM.IdMap.Equal Imap1 Imap2.
     Proof.
       intros c Iast Imap1 Imap2.
-      unfold intrfs_has_type.
+      unfold intrfs_ast_has_eq_map.
       intros [Hok Heq1] [Hok2 Heq2]. clear Hok2.
       apply IdLPM.Props.eq_list_map__same_list__eq_maps with (ps := Iast);
         assumption.
@@ -299,13 +317,13 @@ Module MIntrfs1Props
         apply IHl' with (ys := l0). reflexivity.
   Qed.
 
-  Theorem intrfs_type_check__sound :
-    forall (c : ctx) (Iast : intrfs_ast) (Imap : intrfs_map),  
-    intrfs_type_check c Iast = Some Imap ->
-    intrfs_has_type c Iast Imap.
+  Theorem intrfs_ast_to_eq_map__sound :
+    forall (c : ctx) (iast : intrfs_ast) (imap : intrfs_map),  
+    intrfs_ast_to_eq_map c iast = Some imap ->
+    intrfs_ast_has_eq_map c iast imap.
   Proof.
     intros c ast mp H.
-    unfold intrfs_type_check, intrfs_has_type in *.
+    unfold intrfs_ast_to_eq_map, intrfs_ast_has_eq_map in *.
     destruct (intrfs_ok_b c ast) eqn:Hok;
     [ apply intrfs_ok_b__sound in Hok | idtac ];
     split ; try inversion H.
@@ -319,15 +337,15 @@ Module MIntrfs1Props
       assumption.
   Qed.
 
-  Theorem intrfs_type_check__complete :
-    forall (c : ctx) (Iast : intrfs_ast) (Imap Imap' : intrfs_map),  
-      intrfs_has_type c Iast Imap ->
-      intrfs_type_check c Iast = Some Imap' ->
-      IdLPM.IdMap.Equal Imap Imap'.
+  Theorem intrfs_ast_to_eq_map__complete :
+    forall (c : ctx) (iast : intrfs_ast) (imap imap' : intrfs_map),  
+      intrfs_ast_has_eq_map c iast imap ->
+      intrfs_ast_to_eq_map c iast = Some imap' ->
+      IdLPM.IdMap.Equal imap imap'.
   Proof.
     intros c ast mp mp' Htype Hcheck.
-    apply intrfs_type_check__sound in Hcheck.
-    apply Helper.intrfs_has_type__iso with (c := c) (Iast := ast); 
+    apply intrfs_ast_to_eq_map__sound in Hcheck.
+    apply Helper.intrfs_ast_has_eq_map__iso with (c := c) (Iast := ast); 
       assumption.
   Qed.
 

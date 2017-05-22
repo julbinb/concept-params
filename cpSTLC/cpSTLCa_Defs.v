@@ -442,11 +442,9 @@ Hint Unfold concept_welldefined.
     concept types. *)
 
 Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Prop :=
-  
-
   (** concept def must be well-defined *)
   concept_welldefined cst C
-  /\  match C  with cpt_def cname cbody =>
+(*  /\  match C  with cpt_def cname cbody =>
       match CT with CTdef   cnmtys => 
       let pnds := map namedecl_to_pair cbody in
   (** all concept members are reflected in a concept type *)      
@@ -454,7 +452,14 @@ Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Pro
                          find_ty f cnmtys = Some T end) pnds
   (** amount of concept members is the same as in the concept type *)
         /\ List.length pnds = IdLPM.IdMap.cardinal cnmtys
-      end end.
+      end end. 
+*)
+  /\ match CT with CTdef cnmtys =>
+     match C  with cpt_def cname cbody =>
+     let pnds := map namedecl_to_pair cbody in
+  (** and the map [cnmtys] has to be equal to the AST [cbody] *)
+     IdLPM.eq_list_map pnds cnmtys
+     end end.
 
 (** At this point we cannot do more on contexts. To check models,
     we have to be able to typecheck terms (function definitions). 
