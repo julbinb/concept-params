@@ -69,6 +69,8 @@ Module IdLPM  := IdLPM'.M. (*MListPair2MapAVL IdUOTOrig.*)
     Terms are STLC terms with the terms:
     - [\c#C. t] (concept parametrization) where [c] is a concept parameter;
     - [t # M] (model application) where [M] is a model.
+    - [c.f] (method invocation) where [f] is a field of the concept [c]
+    - [m.f] (method invocation) where [f] is a field of the model [m]
 
 <<
       CSec ::=           Concept declarations
@@ -307,8 +309,9 @@ Hint Unfold find_ty.
 (** Models are always defined for some concepts. Therefore, 
     a list of members and their types must be the same as in
     the corresponding concept. 
+    For simplicity, we do not allow any extra members in the model.
     The only thing we need to know about a model to typecheck
-    its application is its concept.
+    model application, is its concept.
     But to implement terms reduction, we have to provide 
     information about members' implementation.
 
@@ -1525,32 +1528,51 @@ where "CTbl '$' MTbl ';' t1 '#==>' t2" := (step CTbl MTbl t1 t2) : stlca_scope.
 
 Hint Constructors step.
 
+(* ----------------------------------------------------------------- *)
+(** **** Multi-Step Reduction *)
+(* ----------------------------------------------------------------- *)
 
-Section MultiStep.
+(** [multi_step] is a usual definition of multi-step relation.
+    The only reason we define it manually is because it's not in
+    the form [(t, t)], but [(CTbl, MTbl, t, t)]. *)
 
-Parameter CTable : cptcontext.
-Parameter MTable : mdlcontext.
+Reserved Notation "CTbl '$$' MTbl ';;' t1 '#==>*' t2" (at level 50).
 
-Definition step_fixed : tm -> tm -> Prop := step CTable MTable.
+Inductive multistep (CTbl : cptcontext) (MTbl : mdlcontext) 
+          : tm -> tm -> Prop :=
+  | MST_Refl : forall (t : tm),
+      CTbl $$ MTbl ;; t #==>* t
+  | MST_Step : forall t1 t2 t3,
+      CTbl  $ MTbl  ; t1 #==>  t2 ->
+      CTbl $$ MTbl ;; t2 #==>* t3 ->
+      CTbl $$ MTbl ;; t1 #==>* t3
 
-Notation multistep := (multi step_fixed).
-Notation "t1 '#==>*' t2" := (multistep t1 t2) (at level 40) : cpstlca_scope.
+where "CTbl '$$' MTbl ';;' t1 '#==>*' t2" := (multistep CTbl MTbl t1 t2) 
+                                             : stlca_scope.
 
-Open Scope cpstlca_scope. 
+Open Scope stlca_scope.
 
-Lemma test' : forall (t t' : tm),
-    t #==>* t'.
+Theorem multistep_step : 
+  forall (CTbl : cptcontext) (MTbl : mdlcontext) (t t' : tm),
+    CTbl  $ MTbl  ; t #==>  t' -> 
+    CTbl $$ MTbl ;; t #==>* t'.
 Proof.
-Abort.
+  intros CT MT t t' H.
+  apply MST_Step with t'. apply H. apply MST_Refl.
+Qed.
 
-End MultiStep.
+Theorem multistep_trans :
+  forall (CTbl : cptcontext) (MTbl : mdlcontext) (t1 t2 t3 : tm),
+    CTbl $$ MTbl ;; t1 #==>* t2 ->
+    CTbl $$ MTbl ;; t2 #==>* t3 ->
+    CTbl $$ MTbl ;; t1 #==>* t3.
+Proof.
+  intros CT MT t1 t2 t3 H12.
+  induction H12; intros H23.
+    - (* refl *) assumption.
+    - (* step *)
+      specialize (IHmultistep H23).
+      apply MST_Step with t2; assumption.
+Qed.
 
 
-(*
-Open Scope cpstlca_scope. 
-
-
-Lemma test' : forall (t t' : tm),
-    t #==>* t'.
-
-*)

@@ -450,20 +450,110 @@ Qed.
 (** ** Soundness *)
 (* ################################################################# *)
 
-(*
-MultiStep.
+Section HelperProgress.
 
-Lemma test : forall (t t' : tm),
-    t #==>* t'.
+  Variable CTbl : cptcontext.
+  Variable MTbl : mdlcontext.
+
+  Lemma canonical_forms_bool : forall (t : tm),
+      CTbl $ MTbl ; ctxempty |- t \in TBool ->
+      value t ->
+      (t = ttrue) \/ (t = tfalse).
+  Proof.
+    intros t HT HVal.
+    inversion HVal; inversion HT; subst; try solve_by_invert; try tauto.
+  Qed.
+
+  Lemma canonical_forms_nat : forall (t : tm),
+      CTbl $ MTbl ; ctxempty |- t \in TNat ->
+      value t ->
+      exists n, t = tnat n.
+  Proof.
+    intros t HT HVal.
+    inversion HVal; inversion HT; subst; try solve_by_invert. 
+    exists n0. symmetry. assumption.
+  Qed.
+
+  Lemma canonical_forms_lambda : forall (t : tm) (T1 T2 : ty),
+      CTbl $ MTbl ; ctxempty |- t \in (TArrow T1 T2) ->
+      value t ->
+      exists x s, t = tabs x T1 s.
+  Proof.
+    intros t T1 T2 HT HVal.
+    inversion HVal; inversion HT; subst; try solve_by_invert. 
+    exists x0 t12. symmetry. assumption.
+  Qed.
+
+  Lemma canonical_forms_cpt_lambda : forall (t : tm) (C : id) (T : ty),
+      CTbl $ MTbl ; ctxempty |- t \in (TConceptPrm C T) ->
+      value t ->
+      exists c s, t = tcabs c C s.
+  Proof.
+    intros t T1 T2 HT HVal.
+    inversion HVal; inversion HT; subst; try solve_by_invert. 
+    exists c0 t1. symmetry. assumption.
+  Qed.
+
+End HelperProgress.
 
 
-Lemma test : forall (t t' : tm),
-    step_fixed t t'.
+Theorem progress : forall CTbl MTbl t T,
+     CTbl $ MTbl ; ctxempty |- t \in T ->
+     value t \/ exists t', CTbl $ MTbl ; t #==> t'.
+Proof.
+  intros CTbl MTbl.
+  intros t T HT.
+  (* [remember] is a technical moment: otherwise information 
+     about emptiness of Gamma is lost. *)
+  remember ctxempty as Gamma.
+  induction HT; subst Gamma; eauto.
+(* tvar *)
+  - (* var cannot be typed in empty context*) 
+    inversion H.
+(* tapp *)
+  - (* application always makes a step *)
+    right.
+    (* case analysis on [t1] progress *)
+    destruct IHHT1; try tauto.
+    + (* case analysis on [t2] progress *)
+      destruct IHHT2; try tauto.
+      * (* abs val *)
+        pose proof (canonical_forms_lambda _ _ _ _ _ HT1 H) as Ht1.
+        inversion Ht1 as [x Hs]. inversion Hs as [s Heq].
+        exists ([x := t2] s). subst. 
+        constructor. assumption.
+      * (* t2 #==> t2' *)
+        inversion H0 as [t2' Ht2].
+        exists (tapp t1 t2'). 
+        constructor; assumption.
+    + (* t1 #==> t1' *)
+      inversion H as [t1' Ht1].
+      exists (tapp t1' t2). 
+      constructor; assumption.
+(* tmapp *)
+  - (* model application always makes a step *)
+    right.
+    (* case analysis on [t1] progress *)
+    destruct IHHT; try tauto.
+    + (* t1 is a value -- concept abstraction *)
+      pose proof (canonical_forms_cpt_lambda _ _ _ _ _ HT H0) as Ht1.
+      inversion Ht1 as [c Hs]. inversion Hs as [s Heq].
+      exists ([#c := M] s). subst t1. 
+      apply ST_MAppCAbs with (Mbody := Mbody). assumption.
+    + (* t1 #==> t1' *)
+      inversion H0 as [t1' Ht1].
+      exists (tmapp t1' M). 
+      constructor; assumption.
+(* tcinvk c f *)
+  - (* concept method invocation cannot be types in empty Gamma *)
+    inversion H.
+(* tcinvk M f *)
+  - (* method invocation makes a step to its body *)
+    right.
+    (* For this we actually need model table correctness *)
 
 
-Theorem progress : forall t T,
-     empty |- t \in T ->
-     value t \/ exists t', t ==> t'.
-*)
+
+Abort.
 
 
