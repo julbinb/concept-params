@@ -14,6 +14,7 @@ Require Import ConceptParams.AuxTactics.BasicTactics.
 Require Import ConceptParams.SetMapLib.List2Set.
 Require Import ConceptParams.SetMapLib.ListPair2FMap.
 
+Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
 Require Import ConceptParams.GenericModuleLib.MIntrfs1.
 
 Require Import Coq.Lists.List.
@@ -38,64 +39,8 @@ Require Import Coq.Structures.Equalities.
 (* ***************************************************************** *)
 
 (* ################################################################# *)
-(** ** Module Types defining Parameters *)
-(* ################################################################# *)
-
-(** Data which might depend on some local context. *)
-Module Type DepData.  
-  (** Contains types [t] and [ctx] *)
-  Include Data. 
-
-  (** Type of local context which might be
-      required for checking a  *)
-  Parameter ctxloc : Type.
-End DepData.
-
-Module Type DepDataOkDef (Import D : DepData) 
-       (Import MI : IntrfsBase).
-  (* Element [id] = [t] must be ok with respect 
-     to global [ctx] and local [ctxloc] contexts, and it also should 
-     correspond to the interface represented by [intrfs_map] *) 
-  Parameter is_ok : ctx -> intrfs_map -> ctxloc -> 
-                    id -> t -> Prop.
-End DepDataOkDef.
-
-Module Type DepDataOkInterp (Import D : DepData)
-       (Import MI : IntrfsBase).
-  Parameter is_ok_b : ctx -> intrfs_map -> ctxloc -> 
-                      id -> t -> bool.
-End DepDataOkInterp.
-
-Module Type DepDataOkProp (Import D : DepData) 
-       (Import MI : IntrfsBase)
-       (Import DDef : DepDataOkDef D MI) (Import DInt : DepDataOkInterp D MI).
-
-  Axiom is_ok_b__sound : 
-    forall (c : ctx) (imap : MI.intrfs_map) (cl : ctxloc)
-           (nm : id) (x : t),
-      is_ok_b c imap cl nm x = true -> is_ok c imap cl nm x.
-
-  Axiom is_ok_b__complete : 
-    forall (c : ctx) (imap : MI.intrfs_map) (cl : ctxloc) 
-           (nm : id) (x : t),
-      is_ok c imap cl nm x -> is_ok_b c imap cl nm x = true.
-End DepDataOkProp.
-
-(* ################################################################# *)
 (** ** Shared Parameters of all building blocks *)
 (* ################################################################# *)
-
-Module Type ImplmnBase (Import MI : IntrfsBase).
-  (** Module of a corresponding interface (the data depends on) *)
-(*  Declare Module MI : IntrfsBase. *)
-
-  (* Terms Data *) 
-  Declare Module TmDT : DepData.
-  Definition tm := TmDT.t.
-
-  Definition implmn_ast := list (id * tm).
-  Definition implmn_map := IdLPM.id_map tm.
-End ImplmnBase.
 
 Module Type Implmn1Base (Import MI : IntrfsBase).
   Include (ImplmnBase MI).
@@ -140,7 +85,7 @@ Module MImplmn1Defs
          end end.
 
     (** [initP] could be any provable proposition.
-      This is more convenient for doing proofs than 
+        This is more convenient for doing proofs than 
         using [True] as initial proposition, for example. *)
     Definition terms_ok' 
                (c : ctx) (imap : intrfs_map) (cl : ctxloc) (initP : Prop)

@@ -373,12 +373,13 @@ Module TestTypes1.
   Proof.
     intros H. inversion H; subst.
     unfold concept_defined in H2.
-    assert (Hcontra : cstempty CNnmonoid = None) by reflexivity.
+    assert (Hcontra : IdLPM.IdMap.find CNnmonoid cstempty = None) by reflexivity.
     tryfalse.
   Qed.
   
   Example test_type_2_2 :
-    type_valid (update cstempty CNnmonoid CTnmonoid) (TConceptPrm CNnmonoid tyNatBoolNat).
+    type_valid (IdLPM.IdMap.add CNnmonoid CTnmonoid cstempty) 
+               (TConceptPrm CNnmonoid tyNatBoolNat).
   Proof.
     apply type_valid_cpt.
     + unfold concept_defined. intros Hnm. tryfalse.
@@ -399,7 +400,8 @@ Module TestTypes1_b.
   Proof. reflexivity. Qed.
 
   Example test_type_2_2 :
-    type_valid_b (update cstempty CNnmonoid CTnmonoid) (TConceptPrm CNnmonoid tyNatBoolNat)
+    type_valid_b (IdLPM.IdMap.add CNnmonoid CTnmonoid cstempty) 
+                 (TConceptPrm CNnmonoid tyNatBoolNat)
     = true.
   Proof. reflexivity. Qed.
 End TestTypes1_b.

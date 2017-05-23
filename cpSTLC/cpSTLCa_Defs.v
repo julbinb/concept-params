@@ -32,7 +32,9 @@ Require Import ConceptParams.AuxTactics.BasicTactics.
 Require Import ConceptParams.SetMapLib.List2Set.
 Require Import ConceptParams.SetMapLib.ListPair2FMap.
 
+Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
 Require Import ConceptParams.GenericModuleLib.MIntrfs1.
+Require Import ConceptParams.GenericModuleLib.SinglePassModule.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -52,7 +54,7 @@ Module IdLS  := IdLS'.M.
 
 (** [ListPair2FMap] module for [id] type of identifiers. *)
 Module IdLPM' := MListPair2FMapAVL IdUOTOrig.
-Module IdLPM  := IdLPM'.M. (*MListPair2MapAVL IdUOTOrig.*)
+Module IdLPM  := IdLPM'.M. 
 
 
 (* ################################################################# *)
@@ -189,7 +191,6 @@ Inductive tm : Type :=
 (* ----------------------------------------------------------------- *)
 
 (** Name declaration *)
-
 Inductive namedecl : Type :=
   | nm_decl : id -> ty -> namedecl   (* f : T *)
 .
@@ -201,21 +202,24 @@ Definition namedecl_to_pair (nmdecl : namedecl) : (id * ty) :=
   end.
 
 (** List of name declarations *)
-
 Definition namedecl_list : Type := list namedecl.
 Hint Unfold namedecl_list.
 
 (** Concept definition *)
-
 Inductive conceptdef : Type :=
   | cpt_def : id -> namedecl_list -> conceptdef   (* concept Id NameDefs endc *)
 .
+
+(** Auxiliary function to transform concept definition into pair *)
+Definition conceptdef_to_pair (C : conceptdef) : (id * namedecl_list) :=
+  match C with
+    cpt_def Cname Cbody => (Cname, Cbody)
+  end.
 
 Definition conceptdef__get_name (C : conceptdef) : id :=
   match C with cpt_def nm nmdecls => nm end.
 
 (** Concept declarations Section *)
-
 Definition conceptsec : Type := list conceptdef.
 Hint Unfold conceptsec.
 
@@ -339,14 +343,14 @@ Hint Unfold find_tm.
 (** Concept symbol table is a map from concept names
     to concept types [Ci -> CTi]. *)
 
-Definition cptcontext : Type := partial_map cty.
-Definition cstempty : cptcontext := @empty cty.
+Definition cptcontext : Type := IdLPM.id_map cty.
+Definition cstempty : cptcontext := IdLPM.IdMap.empty cty.
 
 (** Model symbol table is a map from model names
     to model types [Mi -> MTi]. *)
 
-Definition mdlcontext : Type := partial_map mty.
-Definition mstempty : mdlcontext := @empty mty.
+Definition mdlcontext : Type := IdLPM.id_map mty.
+Definition mstempty : mdlcontext := @IdLPM.IdMap.empty mty.
 
 (* ================================================================= *)
 (** *** Checking Types Validity *)
@@ -369,7 +373,7 @@ Definition mstempty : mdlcontext := @empty mty.
  *)
 
 Definition concept_defined (st : cptcontext) (nm : id) : Prop := 
-  st nm <> None.
+  IdLPM.IdMap.find nm st <> None.
   
 Inductive type_valid (st : cptcontext) : ty -> Prop :=
   | type_valid_nat   : type_valid st TNat
@@ -401,7 +405,8 @@ Module ty_DataOkDef <: DataOkDef ty_Data.
   Definition is_ok := type_valid.
 End ty_DataOkDef.
 
-Module ty_Intrfs1Base <: Intrfs1Base.
+(** Identifier Data Module *)
+Module MIdBase <: IdentifiersBase.
   Module IdDT  := IdLS'.M.IdDT.
   Module IdSET := IdLS'.IdSetAVL.
   Module IdLS := IdLS.
@@ -413,7 +418,10 @@ Module ty_Intrfs1Base <: Intrfs1Base.
   Module TyDT := ty_Data.
 
   Definition id := id.
-  (*Definition id_set := IdLS.id_set.*)
+End MIdBase.
+
+Module ty_Intrfs1Base <: Intrfs1Base.
+  Include MIdBase.
 
   Definition ty := ty.
   Definition ctx := cptcontext.
@@ -438,8 +446,6 @@ Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
   end.
 Hint Unfold concept_welldefined.
 
-(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
-
 (** We have a symbol table for concepts, concept types, but
     we have not defined yet a relation on concept definitions and
     concept types. *)
@@ -447,22 +453,105 @@ Hint Unfold concept_welldefined.
 Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Prop :=
   (** concept def must be well-defined *)
   concept_welldefined cst C
-(*  /\  match C  with cpt_def cname cbody =>
-      match CT with CTdef   cnmtys => 
-      let pnds := map namedecl_to_pair cbody in
-  (** all concept members are reflected in a concept type *)      
-        List.Forall (fun pnd => match pnd with (f, T) =>
-                         find_ty f cnmtys = Some T end) pnds
-  (** amount of concept members is the same as in the concept type *)
-        /\ List.length pnds = IdLPM.IdMap.cardinal cnmtys
-      end end. 
-*)
   /\ match CT with CTdef cnmtys =>
      match C  with cpt_def cname cbody =>
      let pnds := map namedecl_to_pair cbody in
   (** and the map [cnmtys] has to be equal to the AST [cbody] *)
      IdLPM.eq_list_map pnds cnmtys
      end end.
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+(** Now we have to check that all concepts are well-defined.
+    Later defined concepts can refer to the previously defined ones.
+    Thus, we can use SinglePassModule for this. *)
+
+Module MCptDef_DataLC <: DataLC.
+  (** One concept definition is a member in this case. *)
+  Definition t := conceptdef.
+  (** We have no global context. *)
+  Definition ctx := unit.
+  (** Local context contains information about previously defined 
+      concepts. *)
+  Definition ctxloc := cptcontext.
+End MCptDef_DataLC.
+
+Module MCptDef_DataLCOkDef <: DataLCOkDef MCptDef_DataLC.
+  Definition is_ok (c : unit) (cl : cptcontext) (cpt : conceptdef) : Prop 
+    := concept_welldefined cl cpt.
+End MCptDef_DataLCOkDef.
+
+Module IdModuleBase <: ModuleBase.
+  Module MId := MIdBase.
+  Definition id := MId.id.
+  Definition id_set := MId.IdLS.id_set.
+  Definition id_map := MId.IdLPM.id_map.
+End IdModuleBase.
+
+Module IdSinglePassModuleBase <: SinglePassModuleBase.
+  Include IdModuleBase.
+  
+  Module MD := MCptDef_DataLC.
+  Definition dt := MD.t.
+  Definition ctx := MD.ctx.
+  Definition ctxloc := MD.ctxloc.
+
+  (** Initial local context *)
+  Definition ctxl_init : ctxloc := cstempty.
+
+  (** Update local context *)
+  Definition upd_ctxloc (cl : cptcontext) (c : unit) 
+             (nm : id) (cpt : conceptdef) : cptcontext :=
+    match cpt with 
+      cpt_def Cname Cbody =>
+      let nmtys := map namedecl_to_pair Cbody in
+      (* convert declarations into finite map, 
+         and add this map into the context *)
+      IdLPM.IdMap.add Cname (CTdef (IdLPM.map_from_list nmtys)) cl
+    end.
+
+End IdSinglePassModuleBase.
+
+Module MCptDef_SPMDefs := 
+  SinglePassModuleDefs IdSinglePassModuleBase MCptDef_DataLCOkDef.
+
+Definition conceptdef_pair_with_id (C : conceptdef) : id * conceptdef :=
+  match C with cpt_def Cname _ => (Cname, C)  end.
+
+(** What it means for a concept section to be well-defined. *)
+Definition conceptsec_welldefined (cpts : conceptsec) : Prop :=
+  let pcpts := map conceptdef_pair_with_id cpts in
+  MCptDef_SPMDefs.module_ok tt pcpts.
+
+Definition conceptdef_to_cty (C : conceptdef) : cty :=
+  match C with 
+    cpt_def Cname Cbody => 
+    let nmtys := map namedecl_to_pair Cbody in
+    CTdef (IdLPM.map_from_list nmtys) 
+  end.
+
+Definition namedecl_list_to_cty (decls : namedecl_list) : cty :=
+  let nmtys := map namedecl_to_pair decls in
+  CTdef (IdLPM.map_from_list nmtys).
+
+Definition conceptdef_to_pair_id_cty (C : conceptdef) : id * cty :=
+  match C with 
+    cpt_def Cname Cbody => (Cname, namedecl_list_to_cty Cbody)  
+  end.
+
+(** What it means for a concept context to be well-defined. 
+ ** [cst] is well-defined if exists a well-defined AST
+ ** equal to the concept context.*)
+Definition cptcontext_welldefined (cst : cptcontext) : Prop :=
+  exists (cpts : conceptsec),
+    let pctys := map conceptdef_to_pair_id_cty cpts in
+    IdLPM.IdMap.Equal cst (IdLPM.map_from_list pctys).
+                                                            
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
 (** At this point we cannot do more on contexts. To check models,
     we have to be able to typecheck terms (function definitions). 
@@ -623,7 +712,7 @@ Definition ctxempty : context := @empty ctxvarty.
 (** Aux function for typing relation *)
 Definition concept_fun_member (CTable : cptcontext) 
            (C : id) (f : id) (TF : ty) : Prop :=
-  match CTable C with
+  match IdLPM.IdMap.find C CTable with
   | None => False
   | Some (CTdef fundefs) => find_ty f fundefs = Some TF
   end.
@@ -644,11 +733,11 @@ Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop :=
       CTable $ MTable ; (update Gamma x (tmtype T11)) |- t12 \in T12 ->        
       CTable $ MTable ; Gamma |- tabs x T11 t12 \in (TArrow T11 T12)
   | T_MApp  : forall CTable MTable Gamma t1 M C Mbody T1,
-      MTable M = Some (MTdef C Mbody) ->
+      IdLPM.IdMap.find M MTable = Some (MTdef C Mbody) ->
       CTable $ MTable ; Gamma |- t1 \in TConceptPrm C T1 ->
       CTable $ MTable ; Gamma |- tmapp t1 M \in T1
   | T_CAbs  : forall CTable MTable Gamma c t1 C Cbody T1,
-      CTable C = Some (CTdef Cbody) ->
+      IdLPM.IdMap.find C CTable = Some (CTdef Cbody) ->
       CTable $ MTable ; (update Gamma c (cpttype C)) |- t1 \in T1 ->
       CTable $ MTable ; Gamma |- tcabs c C t1 \in TConceptPrm C T1
   | T_CInvk : forall CTable MTable Gamma c f C TF,
@@ -657,7 +746,7 @@ Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop :=
       CTable $ MTable ; Gamma |- tcinvk c f \in TF
   | T_MInvk : forall CTable MTable Gamma M C Mbody f TF,
       Gamma M = None ->
-      MTable M = Some (MTdef C Mbody) ->
+      IdLPM.IdMap.find M MTable = Some (MTdef C Mbody) ->
       concept_fun_member CTable C f TF ->
       CTable $ MTable ; Gamma |- tcinvk M f \in TF
   | T_True  : forall CTable MTable Gamma,
@@ -718,7 +807,7 @@ Hint Constructors has_type.
 *)
 
 Definition model_defined (st : mdlcontext) (nm : id) : Prop := 
-  st nm <> None.
+  IdLPM.IdMap.find nm st <> None.
 
 (** [model_member_valid] is a proposition stating that the given
     model member [nd] (name definition, [f := t]) is valid against
@@ -745,7 +834,7 @@ Definition model_welldefined (cst : cptcontext) (mst : mdlcontext) (M : modeldef
     (** concept is defined in symbol table *)
     concept_defined cst C
     (** fnmtys is a map from C ids to their types *)
-    /\ (exists fnmtys : id_ty_map, cst C = Some (CTdef fnmtys)
+    /\ (exists fnmtys : id_ty_map, IdLPM.IdMap.find C cst = Some (CTdef fnmtys)
     (** model members are the same as concept members *)
        /\ let fnmtys_list := IdLPM.IdMap.elements fnmtys in
           let Cfnames := List.map fst fnmtys_list in
@@ -796,6 +885,7 @@ Definition model_has_type (cst : cptcontext) (mst : mdlcontext)
     - all concepts in the section are well-defined against it;
     - symbol table contains appropriate concept types. *)
 
+(*
 Definition conceptsec_welldefined (cptsec : conceptsec) (cst : cptcontext) : Prop :=
   (*Forall (fun (C : conceptdef) => concept_welldefined cst C) cptsec
   /\ Forall (fun (C : conceptdef) => cst (conceptdef__get_name C) <> None) cptsec*)
@@ -803,10 +893,11 @@ Definition conceptsec_welldefined (cptsec : conceptsec) (cst : cptcontext) : Pro
             (concept_welldefined cst C)
             /\ (exists (CT : cty),
                    (* concept symb. table contains info about type of C *)
-                   cst (conceptdef__get_name C) = Some CT 
+                   IdLPM.IdMap.find (conceptdef__get_name C) cst = Some CT 
                    (* and C indeed has this type *)
                    /\ concept_has_type cst C CT)
          ) cptsec. 
+*)
 
 (** First, model section (list of model definitions) is also 
     to be well-formed. 
@@ -821,7 +912,7 @@ Definition modelsec_welldefined
             (model_welldefined cst mst M)
             /\ (exists (MT : mty),
                    (* model symb. table contains info about type of M *)
-                   mst (modeldef__get_name M) = Some MT
+                   IdLPM.IdMap.find (modeldef__get_name M) mst = Some MT
                    (* and M indeed has this type *)
                    /\ model_has_type cst mst M MT)
          ) mdlsec.
@@ -833,7 +924,7 @@ Definition program_has_type (cst : cptcontext) (mst : mdlcontext)
            (prg : program) (T : ty) : Prop :=
   match prg with tprog cptsec mdlsec t =>
     (** All concepts are well defined *)
-    conceptsec_welldefined cptsec cst 
+    conceptsec_welldefined cptsec 
     (** All models are well defined *)
     /\ modelsec_welldefined mdlsec cst mst
     (** Term is well typed *)
@@ -1427,14 +1518,14 @@ Inductive step (CTbl : cptcontext) (MTbl : mdlcontext) : tm -> tm -> Prop :=
          CTbl $ MTbl ; (tapp v1 t2) #==> (tapp v1 t2')
 (* mapp *)
   | ST_MAppCAbs : forall c C t M Mbody,
-         MTbl M = Some (MTdef C Mbody) ->
+         IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
          CTbl $ MTbl ; (tmapp (tcabs c C t) M) #==> ([#c:=M] t)
   | ST_MApp1 : forall t1 t1' M,
          CTbl $ MTbl ; t1 #==> t1' ->
          CTbl $ MTbl ; (tmapp t1 M) #==> (tmapp t1' M)
 (* cinvk *)
   | ST_CInvk : forall M f C Mbody tf,
-         MTbl M = Some (MTdef C Mbody) ->
+         IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
          find_tm f Mbody = Some tf -> 
          CTbl $ MTbl ; (tcinvk M f) #==> tf
 (* if *)

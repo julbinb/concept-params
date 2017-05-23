@@ -6,7 +6,7 @@
    Properties of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Tue, 28 Mar 2017
+   Last Update: Mon, 22 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -30,10 +30,11 @@ Require Import ConceptParams.BasicPLDefs.Utils.
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
+Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
+Require Import ConceptParams.GenericModuleLib.MIntrfs1.
+
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 Require Import ConceptParams.cpSTLC.cpSTLCa_Interpreter.
-
-Require Import ConceptParams.GenericModuleLib.MIntrfs1.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -179,7 +180,7 @@ Proof.
   - (* concept_defined *)
     unfold concept_defined.
     intros Hcontra. unfold concept_defined_b in H1.
-    destruct (cst i); tryfalse.
+    destruct (IdLPM.IdMap.find i cst); tryfalse.
   - (* type_valid *)
     apply IHT in H2. assumption.
 Qed.
@@ -205,7 +206,7 @@ Proof.
     (* concept_defined *)
     unfold concept_defined_b.
     unfold concept_defined in H2.
-    destruct (cst i); tauto.
+    destruct (IdLPM.IdMap.find i cst); tauto.
     (* type_valid *) assumption.
 Qed.
 

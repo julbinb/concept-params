@@ -1,8 +1,8 @@
 (* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 (* Module with Certified Checking 
-   of the simplest module-interface.
+   of Simple Module.
   
-   Last Update: Wed, 3 May 2017
+   Last Update: Tue, 23 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 Add LoadPath "../..".
@@ -23,13 +23,11 @@ Require Import Coq.Structures.Orders.
 Require Import Coq.Structures.Equalities.
 
 (* ***************************************************************** *)
-(** * Module-Interface 1 
+(** * Simple Module *)
 
-      The Simplest Semantics of Modules *)
-
-(** Module-Interfase is well-defined if
+(** Simple Module is well-defined if
     all names are different 
-    and all types are well-defined. *)
+    and all members are well-defined (independtly of each other). *)
 (* ***************************************************************** *)
 (* ***************************************************************** *)
 
@@ -37,35 +35,53 @@ Require Import Coq.Structures.Equalities.
 (** ** Shared Parameters of all building blocks *)
 (* ################################################################# *)
 
-Module Type Intrfs1Base.
-  Include IntrfsBase.
-  Definition ctx := TyDT.ctx.
-End Intrfs1Base.
+Module Type SimpleModuleBase.
+  Include ModuleBase.
+
+  Declare Module MD : DataC.
+  Definition dt := MD.t.
+  Definition ctx := MD.ctx.
+End SimpleModuleBase.
+
+Module SimpleModule_Data (MMB : SimpleModuleBase) 
+<: GenericModule_Data. 
+
+  Definition dt := MMB.dt.
+  Definition ctx := MMB.ctx.
+End SimpleModule_Data.
 
 (* ################################################################# *)
 (** ** Propositional Part *)
 (* ################################################################# *)
 
-Module MIntrfs1Defs (Import MIB : Intrfs1Base) 
-       (Import TOkD : DataOkDef MIB.TyDT).
+Module SimpleModuleDefs (Import MMB : SimpleModuleBase) 
+       (Import TOkD : DataCOkDef MMB.MD).
 
   Module HelperD.
+    (** Aux definition "all members in a list are ok" *)
+    Definition members_ok (c : ctx) (dts : list dt) : Prop :=
+      List.Forall (fun elem => is_ok c elem) dts.
 
-    (** Aux definition "all types in a list are ok" *)
-    Definition types_ok (c : ctx) (tps : list ty) : Prop :=
-      List.Forall (fun tp => is_ok c tp) tps.
+    Module MData := SimpleModule_Data MMB.
+    Module MDataM <: GenericModule_DataDefs MId MData. 
+      Definition members_ok (c : ctx) (decls : list (id * dt)) :=
+        members_ok c (map snd decls).
+    End MDataM.
+    Module M := GenericModule_Defs MId MData MDataM.
 
   End HelperD.
 
-  (** Interface given as an AST [ds] is well-defined 
-   ** in the context [c] *)
-  Definition intrfs_ok (c : ctx) (ds : list (id * ty)) : Prop :=
-    let (nms, tps) := split ds in
+  (** Simple Module given as the AST [ds]  
+   ** is well-defined in the context [c] *)
+  Definition module_ok (c : ctx) (decls : list (id * dt)) : Prop :=
+    HelperD.M.module_ok c decls.
+  (*  let (nms, dts) := split decls in
     (** all names are distinct *)
     List.NoDup nms
     (** and all types are valid *)
-    /\ HelperD.types_ok c tps. 
+    /\ HelperD.members_ok c dts. *)
 
+(*
   (** The finite map [imap] corresponds to the given well-defined
    ** AST [iast] of an interface *)
   Definition intrfs_ast_has_eq_map (c : ctx) 
@@ -74,33 +90,40 @@ Module MIntrfs1Defs (Import MIB : Intrfs1Base)
     intrfs_ok c iast
     (* map is equal to ast *)
     /\ IdLPM.eq_list_map iast imap.
-
-End MIntrfs1Defs.
+*)
+End SimpleModuleDefs.
 
 (* ################################################################# *)
 (** ** Computable Part (static checker of the interpreter) *)
 (* ################################################################# *)
 
-Module MIntrfs1Interp (Import MIB : Intrfs1Base) 
-       (Import TOkI : DataOkInterp MIB.TyDT).
+Module SimpleModuleInterp (Import MMB : SimpleModuleBase) 
+       (Import TOkI : DataCOkInterp MMB.MD).
 
   Module HelperI.
+    Definition members_ok_b (c : ctx) (dts : list dt) : bool :=
+      List.forallb (fun elem => is_ok_b c elem) dts.
 
-    Definition types_ok_b (c : ctx) (tps : list ty) : bool :=
-      List.forallb (fun tp => is_ok_b c tp) tps.
-
+    Module MData := SimpleModule_Data MMB.
+    Module MDataM <: GenericModule_DataInterp MId MData. 
+      Definition members_ok_b (c : ctx) (decls : list (id * dt)) := 
+        members_ok_b c (map snd decls).
+    End MDataM.
+    Module M := GenericModule_Interp MId MData MDataM.
   End HelperI.
 
   (** Checks that an interface given as an AST [ds]  
    ** is well-defined in the context [c] *)
-  Definition intrfs_ok_b (c : ctx) (ds : list (id * ty)) : bool :=
-    let (nms, tps) := split ds in
+  Definition module_ok_b (c : ctx) (decls : list (id * dt)) : bool :=
+    HelperI.M.module_ok_b c decls.
+  (* let (nms, dts) := split decls in
     andb
       (** all names are distinct *)
-      (IdLS.ids_are_unique nms)
+      (MId.IdLS.ids_are_unique nms)
       (** and all types are valid *)
-      (HelperI.types_ok_b c tps).
+      (HelperI.members_ok_b c dts). *)
 
+(*
   (** If an interface with the AST [iast] is well-defined,  
    ** converts it to the equal finite map *)
   Definition intrfs_ast_to_eq_map (c : ctx) 
@@ -110,85 +133,124 @@ Module MIntrfs1Interp (Import MIB : Intrfs1Base)
       (* generate map from ast *)
       Some (IdLPM.map_from_list iast)
     else None.
- 
-End MIntrfs1Interp.
+*) 
+End SimpleModuleInterp.
 
 (* ################################################################# *)
 (** ** Proofs of Correctness *)
 (* ################################################################# *)
 
-Module MIntrfs1Props 
-       (Import MIB : Intrfs1Base)
-       (Import TOkD : DataOkDef MIB.TyDT)
-       (Import TOkI : DataOkInterp MIB.TyDT)
-       (Import TOkP : DataOkProp MIB.TyDT TOkD TOkI)
+Module SimpleModuleProps 
+       (Import MMB : SimpleModuleBase)
+       (Import TOkD : DataCOkDef MMB.MD)
+       (Import TOkI : DataCOkInterp MMB.MD)
+       (Import TOkP : DataCOkProp MMB.MD TOkD TOkI)
 .
-  Module Import MID := MIntrfs1Defs   MIB TOkD.
-  Module Import MII := MIntrfs1Interp MIB TOkI.
-  Import MID.HelperD. Import MII.HelperI.
+  Module Import MMD := SimpleModuleDefs   MMB TOkD.
+  Module Import MMI := SimpleModuleInterp MMB TOkI.
+  Import MMD.HelperD. Import MMI.HelperI.
 
-  Lemma types_ok_b__sound : forall (c : ctx) (ts : list ty),
-      types_ok_b c ts = true ->
-      types_ok c ts.
-  Proof.
-    intros c ts. unfold types_ok_b.
-    induction ts as [| tp ts'];
-      intros H.
-    - (* ts = nil *)
-      apply Forall_nil.
-    - (* ts = tp :: ts' *)
-      simpl in H. rewrite -> andb_true_iff in H.
-      inversion H as [Htp Hts']; clear H.
-      apply IHts' in Hts'. 
-      apply TOkP.is_ok_b__sound in Htp.
-      apply Forall_cons; auto.
-  Qed.
+  Module Helper.
 
-  Lemma types_ok_b__complete : forall (c : ctx) (ts : list ty),
-      types_ok c ts ->
-      types_ok_b c ts = true.
-  Proof.
-    intros c ts. unfold types_ok_b.
-    induction ts as [| tp ts' IHts'];
-      intros H.
-    - (* ts = nil *)
-      reflexivity.
-    - (* ts = tp :: ts' *)
-      inversion H; subst.
-      simpl. rewrite -> andb_true_iff. split.
-      + apply TOkP.is_ok_b__complete. assumption.
-      + apply IHts'. assumption.
-  Qed.
+    Lemma members_ok_b__sound : forall (c : ctx) (dts : list dt),
+      members_ok_b c dts = true ->
+      members_ok c dts.
+    Proof.
+      intros c dts. unfold members_ok_b.
+      induction dts as [| tp dts'];
+        intros H.
+      - (* ts = nil *)
+        apply Forall_nil.
+      - (* ts = tp :: ts' *)
+        simpl in H. rewrite -> andb_true_iff in H.
+        inversion H as [Htp Hdts']; clear H.
+        apply IHdts' in Hdts'. 
+        apply TOkP.is_ok_b__sound in Htp.
+        apply Forall_cons; auto.
+    Qed.
 
-  Theorem intrfs_ok_b__sound : forall (c : ctx) (ds : list (id * ty)),
-      intrfs_ok_b c ds = true ->
-      intrfs_ok c ds.
+    Lemma members_ok_b__complete : forall (c : ctx) (ts : list dt),
+        members_ok c ts ->
+        members_ok_b c ts = true.
+    Proof.
+      intros c ts. unfold members_ok_b.
+      induction ts as [| tp ts' IHts'];
+        intros H.
+      - (* ts = nil *)
+        reflexivity.
+      - (* ts = tp :: ts' *)
+        inversion H; subst.
+        simpl. rewrite -> andb_true_iff. split.
+        + apply TOkP.is_ok_b__complete. assumption.
+        + apply IHts'. assumption.
+    Qed.
+
+(* ----------------------------------------------------------------- *) 
+
+    Module MData := MMD.HelperD.MData.
+    Module MDataM <: GenericModule_DataProps 
+                       MId MData MMD.HelperD.MDataM MMI.HelperI.MDataM.
+      Theorem members_ok_b__sound : 
+        forall (c : ctx) (decls : list (id * dt)),
+          MMI.HelperI.MDataM.members_ok_b c decls = true -> 
+          MMD.HelperD.MDataM.members_ok c decls.
+      Proof.
+        intros c decls H.
+        unfold MDataM.members_ok_b in H.
+        unfold MDataM.members_ok.
+        apply members_ok_b__sound. assumption.
+      Qed.
+
+      Theorem members_ok_b__complete : 
+        forall (c : ctx) (decls : list (id * dt)),
+          MMD.HelperD.MDataM.members_ok c decls ->
+          MMI.HelperI.MDataM.members_ok_b c decls = true.
+      Proof.
+        intros c decls H.
+        unfold MDataM.members_ok_b. 
+        unfold MDataM.members_ok in H.
+        apply members_ok_b__complete. assumption.
+      Qed.
+    End MDataM.
+    Module M := GenericModule_Props 
+                  MId MMD.HelperD.MData
+                  MMD.HelperD.MDataM MMI.HelperI.MDataM
+                  MDataM.
+
+  End Helper.
+
+  Theorem module_ok_b__sound : forall (c : ctx) (decls : list (id * dt)),
+      module_ok_b c decls = true ->
+      module_ok c decls.
   Proof.
-    intros c ds. intros H.
-    unfold intrfs_ok_b in H. 
-    unfold intrfs_ok.
+    apply Helper.M.module_ok_b__sound. 
+(*    intros c ds. intros H.
+    unfold module_ok_b in H. 
+    unfold module_ok.
     destruct (split ds).
-    rewrite -> andb_true_iff in H. inversion H as [Hid Hty].
-    apply IdLS.Props.ids_are_unique__sound in Hid.
-    apply types_ok_b__sound in Hty.
-    split; tauto.
+    rewrite -> andb_true_iff in H. inversion H as [Hid Helem].
+    apply MId.IdLS.Props.ids_are_unique__sound in Hid.
+    apply members_ok_b__sound in Helem.
+    split; tauto. *)
   Qed.
 
-  Theorem intrfs_ok_b__complete : forall (c : ctx) (ds : list (id * ty)),
-      intrfs_ok c ds ->
-      intrfs_ok_b c ds = true.
+  Theorem module_ok_b__complete : forall (c : ctx) (decls : list (id * dt)),
+      module_ok c decls ->
+      module_ok_b c decls = true.
   Proof.
-    intros c ds. intros H.
-    unfold intrfs_ok_b.
-    unfold intrfs_ok in H.
+    apply Helper.M.module_ok_b__complete.
+(*    intros c ds. intros H.
+    unfold module_ok_b.
+    unfold module_ok in H.
     destruct (split ds).
-    inversion H as [Hdup Htys].
+    inversion H as [Hdup Hmems].
     rewrite -> andb_true_iff. split.
-    apply IdLS.Props.ids_are_unique__complete in Hdup. assumption.
-    apply types_ok_b__complete. assumption.
+    apply MId.IdLS.Props.ids_are_unique__complete in Hdup. assumption.
+    apply members_ok_b__complete. assumption. *)
   Qed.
 
-  Theorem intrfs_ok__cons : forall (c : ctx) (ds : list (id * ty))
+(*
+  Theorem module_ok__cons : forall (c : ctx) (ds : list (id * ty))
                                    (nm : id) (tp : ty),
       intrfs_ok c ((nm, tp) :: ds) ->
       intrfs_ok c ds.
@@ -215,7 +277,9 @@ Module MIntrfs1Props
     apply types_ok_b__complete.
     apply types_ok_b__sound in H1. inversion H1. assumption.
   Qed.
+*)
 
+(*
 (* ----------------------------------------------------------------- *)
 (** *** Helper Props  *)
 (* ----------------------------------------------------------------- *)
@@ -287,8 +351,8 @@ Module MIntrfs1Props
     apply Helper.intrfs_ast_has_eq_map__iso with (c := c) (Iast := ast); 
       assumption.
   Qed.
-
-End MIntrfs1Props.
+*)
+End SimpleModuleProps.
 
 
 

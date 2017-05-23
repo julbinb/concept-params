@@ -29,9 +29,10 @@ Require Import ConceptParams.BasicPLDefs.Utils.
 Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
-Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
-
+Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
 Require Import ConceptParams.GenericModuleLib.MIntrfs1.
+
+Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
@@ -85,7 +86,7 @@ Qed.*)
 (* ----------------------------------------------------------------- *)
 
 Definition concept_defined_b (st : cptcontext) (nm : id) : bool :=
-  match st nm with
+  match IdLPM.IdMap.find nm st with
   | None   => false
   | Some _ => true
   end.
@@ -100,6 +101,8 @@ Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
   | TConceptPrm c t1 => andb (concept_defined_b st c) (type_valid_b st t1)
   end.
 
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+(** This part is using GenericModulesLib  *)
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
 Module ty_DataOkInterp <: DataOkInterp ty_Data.
@@ -174,7 +177,8 @@ Definition context_get_concept (CTable : cptcontext)
                                (Gamma : context) (c : id) : option cty :=
   option_handle (Gamma c)
                 (fun (ctx_ty : ctxvarty) 
-                 => match ctx_ty with | cpttype C => CTable C | _ => None end)
+                 => match ctx_ty with | cpttype C => 
+                                        IdLPM.IdMap.find C CTable | _ => None end)
                 None.
 
 (** The type checking function. *)
@@ -215,7 +219,7 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
       end
   | tmapp t1 M =>
       (* if t1 : C # T1 and M defines concept C, then (t1 # M) : T1 *)
-      match tycheck Gamma t1, MTable M with
+      match tycheck Gamma t1, IdLPM.IdMap.find M MTable with
         | Some (TConceptPrm C T1), Some (MTdef C' Mbody) => 
           if beq_id C C' then Some T1 else None
         | _, _ => None
@@ -223,7 +227,7 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
   | tcabs c C t1 =>
       (* if C is known concept, and t1 : T1 in (Gamma, c:C), then
          \c#C.t1 : C # T1 *)
-      match CTable C, tycheck (update Gamma c (cpttype C)) t1 with
+      match IdLPM.IdMap.find C CTable, tycheck (update Gamma c (cpttype C)) t1 with
         | Some CT, Some T1 => Some (TConceptPrm C T1)
         | _, _ => None
       end
@@ -232,7 +236,7 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
          then c.f : TF *)
       match Gamma c with
       | Some (cpttype C) => 
-        match CTable C with
+        match IdLPM.IdMap.find C CTable with
         | Some (CTdef Cbody) => find_ty f Cbody 
         | _ => None
         end
@@ -241,9 +245,9 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
       (* if M \notin dom(Gamma), M = ... of C ..., 
          C:CT \in CTable, and f:TF \in CT,
          then M.f : TF *)
-      | None => match MTable c with
+      | None => match IdLPM.IdMap.find c MTable with
                 | Some (MTdef C Mbody) => 
-                  match CTable C with
+                  match IdLPM.IdMap.find C CTable with
                   | Some (CTdef Cbody) => find_ty f Cbody 
                   | None => None
                   end
@@ -288,7 +292,7 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
 *)
 
 Definition model_defined_b (st : mdlcontext) (nm : id) : bool :=
-  match st nm with
+  match IdLPM.IdMap.find nm st with
   | None   => false
   | Some _ => true
   end.
@@ -314,7 +318,7 @@ Definition model_welldefined_b (cst : cptcontext) (mst : mdlcontext)
            (M : modeldef) : bool :=
   match M with 
     mdl_def mname C mbody =>
-    match (cst C) with
+    match (IdLPM.IdMap.find C cst) with
     (** concept is defined in symbol table *)
     | Some (CTdef fnmtys) =>
       let (fnames, fterms) := split (map namedef_to_pair mbody) in
@@ -357,7 +361,7 @@ Definition conceptsec_welldefined_b (cptsec : conceptsec) : cptcontext * bool :=
        in if correct then 
             let ctp := concept_type_check cst C
             in match ctp with
-                 | Some CT => (update cst (conceptdef__get_name C) CT, true)
+                 | Some CT => (IdLPM.IdMap.add (conceptdef__get_name C) CT cst, true)
                  | None    => (cstempty, false)
                end 
           else (cstempty, false)
@@ -372,7 +376,7 @@ Definition modelsec_welldefined_b (mdlsec : modelsec) (cst : cptcontext)
        in if correct then 
             let mtp := model_type_check cst mst M
             in match mtp with
-                 | Some MT => (update mst (modeldef__get_name M) MT, true)
+                 | Some MT => (IdLPM.IdMap.add (modeldef__get_name M) MT mst, true)
                  | None    => (mstempty, false)
                end 
           else (mstempty, false)

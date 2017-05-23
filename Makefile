@@ -104,6 +104,9 @@ VFILES:=BasicPLDefs/Identifier.v\
   AuxTactics/BasicTactics.v\
   SetMapLib/List2Set.v\
   SetMapLib/ListPair2FMap.v\
+  GenericModuleLib/SharedDataDefs.v\
+  GenericModuleLib/SimpleModule.v\
+  GenericModuleLib/SinglePassModule.v\
   GenericModuleLib/MIntrfs1.v\
   GenericModuleLib/MImplmn1.v\
   cpSTLC/cpSTLCa_Defs.v\
