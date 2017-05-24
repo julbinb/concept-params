@@ -98,12 +98,6 @@ Module SinglePassModuleDefs (Import MMB : SinglePassModuleBase)
    ** is well-defined in the context [c]. *)
   Definition module_ok (c : ctx) (decls : list (id * dt)) : Prop :=
     HelperD.M.module_ok c decls.
-  (*  let nms := map fst decls in
-    (** all names are distinct *)
-    List.NoDup nms
-    (** and all members are valid *)
-    /\ HelperD.members_ok c decls. *)
-    
 
 End SinglePassModuleDefs.
 
@@ -123,29 +117,6 @@ Module SinglePassModuleInterp (Import MMB : SinglePassModuleBase)
                (decl : id * dt) : ctxloc
       := match decl with (nm, d) => upd_ctxloc cl c nm d end.
 
-(*
-    (** Aux function checking one member (to be used in [fold_left]).
-     ** The [okAndCl] param is an accumulator. *)
-    Definition process_dep_member_b (c : ctx) 
-               (okAndCl : bool * ctxloc) (decl : id * dt) 
-               : bool * ctxloc := 
-      match okAndCl with 
-      | (true, cl) =>
-        match decl with (nm, d) =>
-          let ok := TOkI.is_ok_b c cl d in
-          let cl' := MMB.upd_ctxloc cl c nm d in
-          (ok, cl')
-        end 
-      | (false, cl) => (false, cl)
-      end.
-
-    (** Aux function checking that all members are ok 
-     ** in the given initial conditions. *)
-    Definition members_ok'_b (c : ctx) (cl : ctxloc) 
-               (decls : list (id * dt)) : bool * ctxloc :=
-      List.fold_left (process_dep_member_b c) decls (true, cl).
-*)
-
     (** Aux function checking that all members are ok. *)
     Definition members_ok_b (c : ctx) (decls : list (id * dt)) : bool :=
       members_ok_b ctx ctxloc (id * dt)
@@ -163,12 +134,6 @@ Module SinglePassModuleInterp (Import MMB : SinglePassModuleBase)
    ** is well-defined in the context [c]. *)
   Definition module_ok_b (c : ctx) (decls : list (id * dt)) : bool :=
     HelperI.M.module_ok_b c decls.
-  (*  let nms := map fst decls in
-    andb
-      (** all names are distinct *)
-      (MId.IdLS.ids_are_unique nms)
-      (** and all types are valid *)
-      (HelperI.members_ok_b c decls). *)
 
 End SinglePassModuleInterp.
 
@@ -276,13 +241,6 @@ Module SinglePassModuleProps
       module_ok c decls.
   Proof.
     apply Helper.M.module_ok_b__sound.
-(*    intros c ds. intros H.
-    unfold module_ok_b in H. 
-    unfold module_ok.
-    rewrite -> andb_true_iff in H. inversion H as [Hid Hds].
-    apply MId.IdLS.Props.ids_are_unique__sound in Hid.
-    apply Helper.members_ok_b__sound in Hds.
-    split; assumption. *)
   Qed.
 
   Theorem module_ok_b__complete : forall (c : ctx) (decls : list (id * dt)),
@@ -290,13 +248,6 @@ Module SinglePassModuleProps
       module_ok_b c decls = true.
   Proof.
     apply Helper.M.module_ok_b__complete.
-(*    intros c ds. intros H.
-    unfold module_ok_b.
-    unfold module_ok in H.
-    inversion H as [Hdup Hmems].
-    rewrite -> andb_true_iff. split.
-    apply MId.IdLS.Props.ids_are_unique__complete in Hdup. assumption.
-    apply Helper.members_ok_b__complete. assumption. *)
   Qed.
 
 End SinglePassModuleProps.

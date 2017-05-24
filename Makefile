@@ -107,6 +107,7 @@ VFILES:=BasicPLDefs/Identifier.v\
   GenericModuleLib/SharedDataDefs.v\
   GenericModuleLib/SimpleModule.v\
   GenericModuleLib/SinglePassModule.v\
+  GenericModuleLib/SinglePassImplModule.v\
   GenericModuleLib/MIntrfs1.v\
   GenericModuleLib/MImplmn1.v\
   cpSTLC/cpSTLCa_Defs.v\

@@ -35,14 +35,14 @@ Require Import ConceptParams.SetMapLib.ListPair2FMap.
 Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
 Require Import ConceptParams.GenericModuleLib.MIntrfs1.
 Require Import ConceptParams.GenericModuleLib.SinglePassModule.
+Require Import ConceptParams.GenericModuleLib.SinglePassImplModule.
 
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
+Require Import Coq.omega.Omega.
 
 Require Import Coq.FSets.FMapInterface.
-
-Require Import Coq.omega.Omega.
 
 
 (** We will use list-2-set and list-pair-2-map machinery 
@@ -56,6 +56,18 @@ Module IdLS  := IdLS'.M.
 Module IdLPM' := MListPair2FMapAVL IdUOTOrig.
 Module IdLPM  := IdLPM'.M. 
 
+(** Identifier Data Module *)
+Module MId <: IdentifiersBase.
+  Module IdDT  := IdLS'.M.IdDT.
+  Module IdSET := IdLS'.IdSetAVL.
+  Module IdLS := IdLS.
+
+  Module IdDT' := IdLPM'.M.IdDT. 
+  Module IdMAP := IdLPM'.IdMapAVL.
+  Module IdLPM := IdLPM.
+
+  Definition id := id.
+End MId.
 
 (* ################################################################# *)
 (** ** Syntax *)
@@ -811,22 +823,84 @@ Definition model_defined (st : mdlcontext) (nm : id) : Prop :=
 
 (** [model_member_valid] is a proposition stating that the given
     model member [nd] (name definition, [f := t]) is valid against
-    a concept with members [fntys] (name declarations, [f : T]).
+    a concept with members [cpt] (name declarations, [f : T])
+    and previously defined members.
 *)
 
 Definition model_member_valid (cst : cptcontext) (mst : mdlcontext)
-                              (fnmtys : id_ty_map) (nd : namedef) : Prop :=
-  match nd with nm_def nm t =>
-    exists (T : ty),
+                              (cpt : id_ty_map) (prevmems : id_ty_map)
+                              (nm : id) (t : tm) : Prop :=
+  let local_ctx := IdLPM.IdMap.fold 
+                     (fun nm tp ctx => update ctx nm (tmtype tp))
+                     prevmems ctxempty in
+  exists (T : ty),
     (** there is [nm : T] in a concept *)
-    find_ty nm fnmtys = Some T
+    find_ty nm cpt = Some T
     (** and [T] is a type of [t], that is [cst * mst ; empty |- t : T] *)
-    /\ has_type cst mst ctxempty t T
-  end.
+    /\ has_type cst mst local_ctx t T.
+
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+(** This part is using GenericModulesLib  *)
+(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+
+(** Here we are going to use [SinglePassImplModule] generic module. *)
+
+Module MMdlMem_DataLCI <: DataLCI.  
+  (** Type of Data *)
+  Definition t := tm.
+  (** Type of Context (might be needed for checking WD of [t]).
+      We need both concept and model table. *)
+  Definition ctx := (cptcontext * mdlcontext) % type. 
+  (** Type of Local Context which might also be needed
+   ** for checking WD of [t] 
+      (here we need types of previously defined members *)
+  Definition ctxloc := id_ty_map.
+  (** Type of Concept *)
+  Definition intrfs := id_ty_map.
+End MMdlMem_DataLCI.
+
+Module MMdlMem_DataLCIOkDef <: DataLCIOkDef MId MMdlMem_DataLCI. 
+  (* Element [t] must be ok with respect 
+     to global [ctx] and local [ctxloc] contexts. *) 
+  Definition is_ok (cm : cptcontext * mdlcontext) 
+             (cpt : id_ty_map) (prevmems : id_ty_map) 
+             (nm : id) (t : tm) : Prop
+    := let (c, m) := cm in
+       model_member_valid c m cpt prevmems nm t.
+End MMdlMem_DataLCIOkDef.
+
+Module MMdlMem_SinglePassImplModuleBase <: SinglePassImplModuleBase.
+  Include IdModuleBase.
+
+  Module MD := MMdlMem_DataLCI.
+  Definition dt := MD.t.
+  Definition ctx := MD.ctx.
+  Definition ctxloc := MD.ctxloc.
+  Definition intrfs := MD.intrfs.
+
+  (** Initial local context *)
+  Definition ctxl_init := IdLPM.IdMap.empty ty.
+  (** Update local context *)
+  Definition upd_ctxloc (prevmems : id_ty_map) (cm : cptcontext * mdlcontext) 
+             (cpt : id_ty_map) (nm : id) (t : tm) : id_ty_map 
+    := match find_ty nm cpt with
+       | Some tp => IdLPM.IdMap.add nm tp prevmems
+       | None => prevmems
+       end.
+
+  (** Members which have to be defined by an interface *)
+  Definition members_to_define (cpt : id_ty_map) : list id 
+    := map fst (IdLPM.IdMap.elements cpt).
+
+End MMdlMem_SinglePassImplModuleBase.
+
+Module MMdlMem_SinglePassImplModuleDefs :=
+  SinglePassImplModuleDefs MMdlMem_SinglePassImplModuleBase MMdlMem_DataLCIOkDef. 
 
 (** Now we are ready to formally define what it means for a model
     to be well-defined. *)
 
+(*
 Definition model_welldefined (cst : cptcontext) (mst : mdlcontext) (M : modeldef) : Prop :=
   match M with 
     mdl_def mname C mbody =>
@@ -931,6 +1005,7 @@ Definition program_has_type (cst : cptcontext) (mst : mdlcontext)
     /\ has_type cst mst ctxempty t T
   end.
 
+*)
 
 (* ################################################################# *)
 (** ** Operational Semantics *)
