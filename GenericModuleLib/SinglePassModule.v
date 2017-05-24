@@ -2,7 +2,7 @@
 (* Module with Certified Checking 
    of Single-Pass Module.
   
-   Last Update: Tue, 23 May 2017
+   Last Update: Wed, 24 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 Add LoadPath "../..".
@@ -66,35 +66,25 @@ Module SinglePassModuleDefs (Import MMB : SinglePassModuleBase)
 
   Module HelperD.
 
-    (** Aux function checking one member (to be used in [fold_left]).
-     ** The [okAndCl] param is an accumulator. *)
-    Definition process_dep_member (c : ctx) 
-               (okAndCl : Prop * ctxloc) (decl : id * dt) 
-               : Prop * ctxloc := 
-      match okAndCl with (ok_prop, cl) =>
-      match decl with (nm, d) =>
-        let ok_prop' := 
-            (* check curr member in the local context *)
-            TOkD.is_ok c cl d  
-            (* and preserve previous members' part *)
-            /\ ok_prop in
-        (* update local context *)
-        let cl' := MMB.upd_ctxloc cl c nm d in
-        (ok_prop', cl')
-      end end.
+    (** We can use generic implementation of single-pass module
+        checking from the SharedDataDefs.
+        For this we need several aux functions. *)
 
-    (** Aux function checking that all members are ok 
-     ** in the given initial conditions.
-     ** The [initP] parameter can be any provable proposition.
-          This is more convenient for doing proofs than 
-          using [True] as initial proposition, for example. *)
-    Definition members_ok' (c : ctx) (cl : ctxloc) (initP : Prop)
-               (decls : list (id * dt)) : Prop * ctxloc :=
-      List.fold_left (process_dep_member c) decls (initP, cl).
+    Definition update_prop (ok : Prop) (c : ctx) 
+               (cl : ctxloc) (decl : id * dt) : Prop
+      := (* check curr member in the local context *)
+          TOkD.is_ok c cl (snd decl)  
+          (* and preserve previous members' part *)
+          /\ ok.
+
+    Definition update_ctxloc (cl : ctxloc) (c : ctx) 
+               (decl : id * dt) : ctxloc
+      := match decl with (nm, d) => upd_ctxloc cl c nm d end.
 
     (** Aux function checking that all members are ok. *)
     Definition members_ok (c : ctx) (decls : list (id * dt)) : Prop :=
-      fst (members_ok' c ctxl_init True decls).
+      members_ok ctx ctxloc (id * dt) 
+                 update_prop update_ctxloc c ctxl_init decls.
 
     Module MData := SinglePassModule_Data MMB.
     Module MDataM <: GenericModule_DataDefs MId MData. 
@@ -126,6 +116,14 @@ Module SinglePassModuleInterp (Import MMB : SinglePassModuleBase)
 
   Module HelperI.
 
+    Definition check_member  (c : ctx) (cl : ctxloc) (decl : id * dt) : bool
+      := TOkI.is_ok_b c cl (snd decl).
+
+    Definition update_ctxloc (cl : ctxloc) (c : ctx) 
+               (decl : id * dt) : ctxloc
+      := match decl with (nm, d) => upd_ctxloc cl c nm d end.
+
+(*
     (** Aux function checking one member (to be used in [fold_left]).
      ** The [okAndCl] param is an accumulator. *)
     Definition process_dep_member_b (c : ctx) 
@@ -146,10 +144,12 @@ Module SinglePassModuleInterp (Import MMB : SinglePassModuleBase)
     Definition members_ok'_b (c : ctx) (cl : ctxloc) 
                (decls : list (id * dt)) : bool * ctxloc :=
       List.fold_left (process_dep_member_b c) decls (true, cl).
+*)
 
     (** Aux function checking that all members are ok. *)
     Definition members_ok_b (c : ctx) (decls : list (id * dt)) : bool :=
-      fst (members_ok'_b c ctxl_init decls).
+      members_ok_b ctx ctxloc (id * dt)
+                   check_member update_ctxloc c ctxl_init decls.
 
     Module MData := SinglePassModule_Data MMB.
     Module MDataM <: GenericModule_DataInterp MId MData. 
@@ -192,147 +192,38 @@ Module SinglePassModuleProps
 
   Module Helper.
     Import MMD.HelperD.
-    
-    (** Soundness *)   
 
-    Lemma process_dep_member_b_preserves_false :
-      forall (c : ctx) (decls : list (id * dt)) (cl : ctxloc),
-        fold_left (process_dep_member_b c) decls (false, cl) = (false, cl).
+    Lemma check_member__sound : 
+      forall (c : ctx) (cl : ctxloc) (decl : id * dt) (P : Prop),
+        P -> 
+        check_member c cl decl = true ->
+        update_prop P c cl decl.
     Proof.
-      intros c ds.
-      induction ds as [| [nm d] ds' IHds'];
-        intros cl.
-      - (* ds = nil *)
-        simpl. reflexivity.
-      - (* ds = (nm, d) :: ds' *)
-        simpl. apply IHds'.
+      intros c cl decl P HP H.
+      unfold check_member in H. unfold update_prop.
+      apply TOkP.is_ok_b__sound in H. tauto.
     Qed.
 
-    Lemma members_ok'_b_cons_true :
-      forall (c : ctx) (decls : list (id * dt)) (cl : ctxloc)
-             (nm : id) (d : dt),
-        fst (members_ok'_b c cl ((nm, d) :: decls)) = true ->
-        fst (members_ok'_b c (upd_ctxloc cl c nm d) decls) = true.
+    Lemma check_member__complete : 
+      forall (c : ctx) (cl : ctxloc) (decl : id * dt) (P : Prop),
+        P -> 
+        update_prop P c cl decl ->
+        check_member c cl decl = true.
     Proof.
-      intros c ds.
-      unfold members_ok'_b. simpl.
-      intros cl nm d H.
-      assert (Hok : is_ok_b c cl d = true).
-      { destruct (is_ok_b c cl d) eqn:Heq.
-        reflexivity.
-        destruct ds as [| elem ds'].
-        + simpl in H. assumption.
-        + rewrite (process_dep_member_b_preserves_false c _ _) in H.
-          simpl in H. inversion H. }
-      rewrite Hok in H. assumption.
+      intros c cl decl P HP H.
+      unfold check_member. unfold update_prop in H.
+      apply TOkP.is_ok_b__complete. tauto.
     Qed.
 
-    Lemma members_ok'_b_true__head_ok :
-      forall (c : ctx) (decls : list (id * dt)) (cl : ctxloc)
-             (nm : id) (d : dt),
-        fst (members_ok'_b c cl ((nm, d) :: decls)) = true ->
-        is_ok_b c cl d = true.
+    Lemma update_prop__spec :
+      forall (c : ctx) (cl : ctxloc) (decl : id * dt) (P : Prop),
+        update_prop P c cl decl -> P.
     Proof.
-      intros c ds cl nm d H.
-      unfold members_ok'_b in H. simpl in H.
-      destruct (is_ok_b c cl d) eqn:Heq.
-      reflexivity.
-      rewrite (process_dep_member_b_preserves_false c _ _) in H.
-      simpl in H. assumption.
-    Qed. 
-
-    Lemma members_ok'_b__sound :
-      forall (c : ctx) (decls : list (id * dt)) (cl : ctxloc) (initP : Prop),
-        initP ->
-        fst (members_ok'_b c cl decls) = true ->
-        fst (members_ok' c cl initP decls).
-    Proof.
-      intros c ds.
-      induction ds as [| [nm t] ds' IHds'];
-        intros cl P HP H.
-      - simpl. assumption.
-      - (* ds = (nm, t) :: ds' *)
-        assert (H' := H).
-        apply members_ok'_b_true__head_ok in H'.
-        assert (H'' := H').
-        apply TOkP.is_ok_b__sound in H''.
-        unfold members_ok'. simpl.
-        apply IHds'.
-        tauto.
-        unfold members_ok'_b in H. simpl in H.
-        unfold members_ok'_b. rewrite H' in H. 
-        assumption.
+      intros c cl decl P H.
+      unfold update_prop in H. tauto.
     Qed.
 
-(* ----------------------------------------------------------------- *) 
-
-    (** Completeness *)
-
-    Lemma members_ok'__fst_prop :
-      forall (c : ctx) (decls : list (id * dt)) (cl : ctxloc) (initP : Prop)
-             (nm : id) (d : dt),
-      exists Ps : Prop,
-        (fst (members_ok' c cl initP ((nm, d) :: decls)) = Ps)
-        /\ (Ps -> (is_ok c cl d) /\ initP).
-    Proof.
-      intros c ds.
-      induction ds as [| [dnm dt] ds' IHds'];
-        intros cl P nm t.
-      - (* ds = nil *)
-        unfold members_ok'. simpl. 
-        exists (is_ok c cl t /\ P).
-        tauto.
-      - (* ds = (dnm, dt) :: ds' *)
-        replace (fst (members_ok' c cl P ((nm, t) :: (dnm, dt) :: ds')))
-        with (fst (members_ok' c (upd_ctxloc cl c nm t) 
-                             (is_ok c cl t /\ P) ((dnm, dt) :: ds')))
-          by (unfold members_ok'; reflexivity).
-        remember (upd_ctxloc cl c nm t) as cl'.      
-        specialize (IHds' cl' (is_ok c cl t /\ P) dnm dt).
-        inversion IHds' as [Ps HPs].
-        inversion HPs as [Heq Himp].
-        exists Ps. split.
-        assumption. tauto.
-    Qed.
-
-    Lemma members_ok'__head_ok :
-      forall (c : ctx) (decls : list (id * dt)) (cl : ctxloc) (initP : Prop)
-             (nm : id) (d : dt),
-        initP ->
-        fst (members_ok' c cl initP ((nm, d) :: decls)) ->
-        (is_ok c cl d) /\ initP.
-    Proof.
-      intros c ds cl P nm t HP H.
-      pose proof (members_ok'__fst_prop c ds cl P nm t) as Hex.
-      inversion Hex as [Ps [Heq Himp]].
-      rewrite Heq in H. apply Himp in H.
-      assumption.
-    Qed. 
-
-    Lemma members_ok'_b__complete :
-      forall (c : ctx) (decls : list (id * dt)) (cl : ctxloc) (initP : Prop),
-        initP ->
-        fst (members_ok' c cl initP decls) ->
-        fst (members_ok'_b c cl decls) = true.
-    Proof.
-      intros c ds.
-      induction ds as [| [nm t] ds' IHds'];
-        intros cl P HP H.
-      - simpl. reflexivity.
-      - (* ds = (nm, t) :: ds' *)
-        assert (H' := H).
-        apply members_ok'__head_ok in H'.
-        inversion H' as [Hok _].
-        assert (Hok' := Hok). apply TOkP.is_ok_b__complete in Hok'.
-        remember (upd_ctxloc cl c nm t) as cl'.
-        replace (members_ok'_b c cl ((nm, t) :: ds'))
-        with (members_ok'_b c cl' ds')
-          by (unfold members_ok'_b; simpl; subst cl'; rewrite Hok'; reflexivity).
-        apply IHds' with (initP := is_ok c cl t /\ P).
-        assumption.
-        unfold members_ok' in *. simpl in *.
-        subst cl'. assumption. assumption.
-    Qed.  
+(* ----------------------------------------------------------------- *)
 
     Lemma members_ok_b__sound :
       forall (c : ctx) (decls : list (id * dt)),
@@ -342,8 +233,9 @@ Module SinglePassModuleProps
       intros c ds H.
       unfold members_ok_b in H.
       unfold members_ok.
-      apply members_ok'_b__sound with (initP := True) in H.
-      assumption. constructor.
+      apply members_ok_b__sound with (update_prop := update_prop) in H.
+      assumption. 
+      exact check_member__sound.
     Qed.
 
     Lemma members_ok_b__complete :
@@ -354,8 +246,10 @@ Module SinglePassModuleProps
       intros c ds H.
       unfold members_ok in H.
       unfold members_ok_b.
-      apply members_ok'_b__complete with (initP := True) in H.
-      assumption. constructor.
+      apply members_ok_b__complete with (check_member := check_member) in H.
+      assumption. 
+      exact check_member__complete.
+      exact update_prop__spec.
     Qed.
 
 (* ----------------------------------------------------------------- *) 
