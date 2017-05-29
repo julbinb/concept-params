@@ -40,22 +40,25 @@ Module Type SinglePassModuleBase.
   Include ModuleBase.
 
   Declare Module MD : DataLC.
-  Definition dt := MD.t.
+  Import MD.
+(*  Definition dt := MD.t.
   Definition ctx := MD.ctx.
-  Definition ctxloc := MD.ctxloc.
+  Definition ctxloc := MD.ctxloc. *)
 
   (** Initial local context *)
   Parameter ctxl_init : ctxloc.
   (** Update local context *)
-  Parameter upd_ctxloc : ctxloc -> ctx -> id -> dt -> ctxloc.
+  Parameter upd_ctxloc : ctxloc -> ctx -> id -> t -> ctxloc.
 End SinglePassModuleBase.
 
+(*
 Module SinglePassModule_Data (MMB : SinglePassModuleBase) 
 <: GenericModule_Data. 
 
   Definition dt := MMB.dt.
   Definition ctx := MMB.ctx.
 End SinglePassModule_Data.
+*)
 
 (* ################################################################# *)
 (** ** Propositional Part *)
@@ -65,6 +68,8 @@ Module SinglePassModuleDefs (Import MMB : SinglePassModuleBase)
        (Import TOkD : DataLCOkDef MMB.MD).
 
   Module HelperD.
+    Export MD.
+    Definition dt := t.
 
     (** We can use generic implementation of single-pass module
         checking from the SharedDataDefs.
@@ -81,23 +86,23 @@ Module SinglePassModuleDefs (Import MMB : SinglePassModuleBase)
                (decl : id * dt) : ctxloc
       := match decl with (nm, d) => upd_ctxloc cl c nm d end.
 
+    (** We can use generic implementation of module-welldefinedness *)
+    (*Module MD := SinglePassModule_Data MMB.*)
+    Module MSP := SinglePassModule_ProcessMembers.
+    Module MGM := GenericModule_ModuleOk MId.
+
     (** Aux function checking that all members are ok. *)
     Definition members_ok (c : ctx) (decls : list (id * dt)) : Prop :=
-      members_ok ctx ctxloc (id * dt) 
-                 update_prop update_ctxloc c ctxl_init decls.
+      MSP.members_ok ctx ctxloc (id * dt) 
+                     update_prop update_ctxloc c ctxl_init decls.
 
-    Module MData := SinglePassModule_Data MMB.
-    Module MDataM <: GenericModule_DataDefs MId MData. 
-      Definition members_ok := members_ok.
-    End MDataM.
-    Module M := GenericModule_Defs MId MData MDataM.
- 
   End HelperD.
+  Import HelperD.
 
   (** Single-Pass Module given as the AST [decls]  
    ** is well-defined in the context [c]. *)
   Definition module_ok (c : ctx) (decls : list (id * dt)) : Prop :=
-    HelperD.M.module_ok c decls.
+    MGM.module_ok dt ctx members_ok c decls.
 
 End SinglePassModuleDefs.
 
@@ -109,6 +114,8 @@ Module SinglePassModuleInterp (Import MMB : SinglePassModuleBase)
        (Import TOkI : DataLCOkInterp MMB.MD).
 
   Module HelperI.
+    Export MD.
+    Definition dt := t.
 
     Definition check_member  (c : ctx) (cl : ctxloc) (decl : id * dt) : bool
       := TOkI.is_ok_b c cl (snd decl).
@@ -117,23 +124,22 @@ Module SinglePassModuleInterp (Import MMB : SinglePassModuleBase)
                (decl : id * dt) : ctxloc
       := match decl with (nm, d) => upd_ctxloc cl c nm d end.
 
+    (*Module MD := SinglePassModule_Data MMB.*)
+    Module MSP := SinglePassModule_ProcessMembers.
+    Module MGM := GenericModule_ModuleOk MId.
+
     (** Aux function checking that all members are ok. *)
     Definition members_ok_b (c : ctx) (decls : list (id * dt)) : bool :=
-      members_ok_b ctx ctxloc (id * dt)
-                   check_member update_ctxloc c ctxl_init decls.
-
-    Module MData := SinglePassModule_Data MMB.
-    Module MDataM <: GenericModule_DataInterp MId MData. 
-      Definition members_ok_b := members_ok_b.
-    End MDataM.
-    Module M := GenericModule_Interp MId MData MDataM.
+      MSP.members_ok_b ctx ctxloc (id * dt)
+                       check_member update_ctxloc c ctxl_init decls.
 
   End HelperI.
+  Import HelperI.
 
   (** Checks that a module given as the AST [decls]  
    ** is well-defined in the context [c]. *)
   Definition module_ok_b (c : ctx) (decls : list (id * dt)) : bool :=
-    HelperI.M.module_ok_b c decls.
+    MGM.module_ok_b dt ctx members_ok_b c decls.
 
 End SinglePassModuleInterp.
 
@@ -190,6 +196,10 @@ Module SinglePassModuleProps
 
 (* ----------------------------------------------------------------- *)
 
+(*    Module MD := SinglePassModule_Data MMB. *)
+    Module MSP := SinglePassModule_ProcessMembers.
+    Module MGM := GenericModule_ModuleOk MId.
+
     Lemma members_ok_b__sound :
       forall (c : ctx) (decls : list (id * dt)),
       members_ok_b c decls = true ->
@@ -198,7 +208,7 @@ Module SinglePassModuleProps
       intros c ds H.
       unfold members_ok_b in H.
       unfold members_ok.
-      apply members_ok_b__sound with (update_prop := update_prop) in H.
+      apply MSP.members_ok_b__sound with (update_prop := update_prop) in H.
       assumption. 
       exact check_member__sound.
     Qed.
@@ -211,24 +221,11 @@ Module SinglePassModuleProps
       intros c ds H.
       unfold members_ok in H.
       unfold members_ok_b.
-      apply members_ok_b__complete with (check_member := check_member) in H.
+      apply MSP.members_ok_b__complete with (check_member := check_member) in H.
       assumption. 
       exact check_member__complete.
       exact update_prop__spec.
     Qed.
-
-(* ----------------------------------------------------------------- *) 
-
-    Module MData := MMD.HelperD.MData.
-    Module MDataM <: GenericModule_DataProps 
-                       MId MData MMD.HelperD.MDataM MMI.HelperI.MDataM.
-      Definition members_ok_b__sound := members_ok_b__sound.
-      Definition members_ok_b__complete := members_ok_b__complete.
-    End MDataM.
-    Module M := GenericModule_Props 
-                  MId MMD.HelperD.MData
-                  MMD.HelperD.MDataM MMI.HelperI.MDataM
-                  MDataM.
 
   End Helper.
 
@@ -240,14 +237,16 @@ Module SinglePassModuleProps
       module_ok_b c decls = true ->
       module_ok c decls.
   Proof.
-    apply Helper.M.module_ok_b__sound.
+    apply Helper.MGM.module_ok_b__sound.
+    apply Helper.members_ok_b__sound.
   Qed.
 
   Theorem module_ok_b__complete : forall (c : ctx) (decls : list (id * dt)),
       module_ok c decls ->
       module_ok_b c decls = true.
   Proof.
-    apply Helper.M.module_ok_b__complete.
+    apply Helper.MGM.module_ok_b__complete.
+    apply Helper.members_ok_b__complete.
   Qed.
 
 End SinglePassModuleProps.

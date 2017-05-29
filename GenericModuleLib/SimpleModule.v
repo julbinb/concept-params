@@ -39,16 +39,10 @@ Module Type SimpleModuleBase.
   Include ModuleBase.
 
   Declare Module MD : DataC.
-  Definition dt := MD.t.
-  Definition ctx := MD.ctx.
+  (*Definition dt := MD.t.
+  Definition ctx := MD.ctx.*)
 End SimpleModuleBase.
 
-Module SimpleModule_Data (MMB : SimpleModuleBase) 
-<: GenericModule_Data. 
-
-  Definition dt := MMB.dt.
-  Definition ctx := MMB.ctx.
-End SimpleModule_Data.
 
 (* ################################################################# *)
 (** ** Propositional Part *)
@@ -58,28 +52,26 @@ Module SimpleModuleDefs (Import MMB : SimpleModuleBase)
        (Import TOkD : DataCOkDef MMB.MD).
 
   Module HelperD.
-    (** Aux definition "all members in a list are ok" *)
-    Definition members_ok (c : ctx) (dts : list dt) : Prop :=
-      List.Forall (fun elem => is_ok c elem) dts.
+    Export MD.
+    Definition dt := t.
 
-    Module MData := SimpleModule_Data MMB.
-    Module MDataM <: GenericModule_DataDefs MId MData. 
-      Definition members_ok (c : ctx) (decls : list (id * dt)) :=
-        members_ok c (map snd decls).
-    End MDataM.
-    Module M := GenericModule_Defs MId MData MDataM.
+    (** Aux definition "all members in a list are ok" *)
+    Definition members_ok' (c : ctx) (dts : list dt) : Prop :=
+      List.Forall (fun elem => is_ok c elem) dts.
+    
+    Definition members_ok (c : ctx) (decls : list (id * dt)) :=
+        members_ok' c (map snd decls).
+    
+    (** We can use generic implementation of module-welldefinedness *)
+    Module MGM := GenericModule_ModuleOk MId.
 
   End HelperD.
+  Import HelperD.
 
   (** Simple Module given as the AST [ds]  
    ** is well-defined in the context [c] *)
   Definition module_ok (c : ctx) (decls : list (id * dt)) : Prop :=
-    HelperD.M.module_ok c decls.
-  (*  let (nms, dts) := split decls in
-    (** all names are distinct *)
-    List.NoDup nms
-    (** and all types are valid *)
-    /\ HelperD.members_ok c dts. *)
+    MGM.module_ok dt ctx members_ok c decls.
 
 (*
   (** The finite map [imap] corresponds to the given well-defined
@@ -101,27 +93,25 @@ Module SimpleModuleInterp (Import MMB : SimpleModuleBase)
        (Import TOkI : DataCOkInterp MMB.MD).
 
   Module HelperI.
-    Definition members_ok_b (c : ctx) (dts : list dt) : bool :=
+    Export MD.
+    Definition dt := t.
+    
+    Definition members_ok'_b (c : ctx) (dts : list dt) : bool :=
       List.forallb (fun elem => is_ok_b c elem) dts.
 
-    Module MData := SimpleModule_Data MMB.
-    Module MDataM <: GenericModule_DataInterp MId MData. 
-      Definition members_ok_b (c : ctx) (decls : list (id * dt)) := 
-        members_ok_b c (map snd decls).
-    End MDataM.
-    Module M := GenericModule_Interp MId MData MDataM.
+    Definition members_ok_b (c : ctx) (decls : list (id * dt)) := 
+      members_ok'_b c (map snd decls).
+
+    (** We can use generic implementation of module-welldefinedness *)
+    Module MGM := GenericModule_ModuleOk MId.
+
   End HelperI.
+  Import HelperI.
 
   (** Checks that an interface given as an AST [ds]  
    ** is well-defined in the context [c] *)
   Definition module_ok_b (c : ctx) (decls : list (id * dt)) : bool :=
-    HelperI.M.module_ok_b c decls.
-  (* let (nms, dts) := split decls in
-    andb
-      (** all names are distinct *)
-      (MId.IdLS.ids_are_unique nms)
-      (** and all types are valid *)
-      (HelperI.members_ok_b c dts). *)
+    MGM.module_ok_b dt ctx members_ok_b c decls.
 
 (*
   (** If an interface with the AST [iast] is well-defined,  
@@ -152,11 +142,11 @@ Module SimpleModuleProps
 
   Module Helper.
 
-    Lemma members_ok_b__sound : forall (c : ctx) (dts : list dt),
-      members_ok_b c dts = true ->
-      members_ok c dts.
+    Lemma members_ok'_b__sound : forall (c : ctx) (dts : list dt),
+      members_ok'_b c dts = true ->
+      members_ok' c dts.
     Proof.
-      intros c dts. unfold members_ok_b.
+      intros c dts. unfold members_ok'_b.
       induction dts as [| tp dts'];
         intros H.
       - (* ts = nil *)
@@ -169,11 +159,11 @@ Module SimpleModuleProps
         apply Forall_cons; auto.
     Qed.
 
-    Lemma members_ok_b__complete : forall (c : ctx) (ts : list dt),
-        members_ok c ts ->
-        members_ok_b c ts = true.
+    Lemma members_ok'_b__complete : forall (c : ctx) (ts : list dt),
+        members_ok' c ts ->
+        members_ok'_b c ts = true.
     Proof.
-      intros c ts. unfold members_ok_b.
+      intros c ts. unfold members_ok'_b.
       induction ts as [| tp ts' IHts'];
         intros H.
       - (* ts = nil *)
@@ -187,35 +177,30 @@ Module SimpleModuleProps
 
 (* ----------------------------------------------------------------- *) 
 
-    Module MData := MMD.HelperD.MData.
-    Module MDataM <: GenericModule_DataProps 
-                       MId MData MMD.HelperD.MDataM MMI.HelperI.MDataM.
-      Theorem members_ok_b__sound : 
-        forall (c : ctx) (decls : list (id * dt)),
-          MMI.HelperI.MDataM.members_ok_b c decls = true -> 
-          MMD.HelperD.MDataM.members_ok c decls.
-      Proof.
-        intros c decls H.
-        unfold MDataM.members_ok_b in H.
-        unfold MDataM.members_ok.
-        apply members_ok_b__sound. assumption.
-      Qed.
+    (** We can use generic implementation of module-welldefinedness *)
+    Module MGM := GenericModule_ModuleOk MId.
 
-      Theorem members_ok_b__complete : 
-        forall (c : ctx) (decls : list (id * dt)),
-          MMD.HelperD.MDataM.members_ok c decls ->
-          MMI.HelperI.MDataM.members_ok_b c decls = true.
-      Proof.
-        intros c decls H.
-        unfold MDataM.members_ok_b. 
-        unfold MDataM.members_ok in H.
-        apply members_ok_b__complete. assumption.
-      Qed.
-    End MDataM.
-    Module M := GenericModule_Props 
-                  MId MMD.HelperD.MData
-                  MMD.HelperD.MDataM MMI.HelperI.MDataM
-                  MDataM.
+    Theorem members_ok_b__sound : 
+      forall (c : ctx) (decls : list (id * dt)),
+        members_ok_b c decls = true -> 
+        members_ok c decls.
+    Proof.
+      intros c decls H.
+      unfold members_ok_b in H.
+      unfold members_ok.
+      apply members_ok'_b__sound. assumption.
+    Qed.
+
+    Theorem members_ok_b__complete : 
+      forall (c : ctx) (decls : list (id * dt)),
+        members_ok c decls ->
+        members_ok_b c decls = true.
+    Proof.
+      intros c decls H.
+      unfold members_ok_b. 
+      unfold members_ok in H.
+      apply members_ok'_b__complete. assumption.
+    Qed.
 
   End Helper.
 
@@ -223,30 +208,16 @@ Module SimpleModuleProps
       module_ok_b c decls = true ->
       module_ok c decls.
   Proof.
-    apply Helper.M.module_ok_b__sound. 
-(*    intros c ds. intros H.
-    unfold module_ok_b in H. 
-    unfold module_ok.
-    destruct (split ds).
-    rewrite -> andb_true_iff in H. inversion H as [Hid Helem].
-    apply MId.IdLS.Props.ids_are_unique__sound in Hid.
-    apply members_ok_b__sound in Helem.
-    split; tauto. *)
+    apply MGM.module_ok_b__sound. 
+    apply Helper.members_ok_b__sound.
   Qed.
 
   Theorem module_ok_b__complete : forall (c : ctx) (decls : list (id * dt)),
       module_ok c decls ->
       module_ok_b c decls = true.
   Proof.
-    apply Helper.M.module_ok_b__complete.
-(*    intros c ds. intros H.
-    unfold module_ok_b.
-    unfold module_ok in H.
-    destruct (split ds).
-    inversion H as [Hdup Hmems].
-    rewrite -> andb_true_iff. split.
-    apply MId.IdLS.Props.ids_are_unique__complete in Hdup. assumption.
-    apply members_ok_b__complete. assumption. *)
+    apply MGM.module_ok_b__complete.
+    apply Helper.members_ok_b__complete.
   Qed.
 
 (*

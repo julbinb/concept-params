@@ -105,11 +105,183 @@ Module Type IdentifiersBase.
   Definition id_map := IdLPM.id_map.*)
 End IdentifiersBase.
 
+(* ################################################################# *)
+(** ** Module Types - Parameters for Well-definedness of Modules *)
+(* ################################################################# *)
+
+(* ================================================================= *)
+(** ** Parameters of Well-definedness of Simple Modules *)
+
+(** In a _Simple Module_ all elements are checked independently 
+ ** of each other: only global context matters. *)
+(* ================================================================= *)
+
+Module Type DataCOkDef (Import D : DataC).
+  Parameter is_ok : ctx -> t -> Prop.
+End DataCOkDef.
+
+Module Type DataCOkInterp (Import D : DataC).
+  Parameter is_ok_b : ctx -> t -> bool.
+End DataCOkInterp.
+
+Module Type DataCOkProp (Import D : DataC) 
+       (Import DDef : DataCOkDef D) (Import DInt : DataCOkInterp D).
+
+  Axiom is_ok_b__sound : forall (c : ctx) (x : t),
+      is_ok_b c x = true -> is_ok c x.
+  Axiom is_ok_b__complete : forall (c : ctx) (x : t),
+      is_ok c x -> is_ok_b c x = true.
+End DataCOkProp.
+
+(* ================================================================= *)
+(** ** Parameters of Well-definedness of Single-Pass Modules *)
+
+(** In a _Single-Pass Module_ following elements can refer to
+ ** the previously defined ones by means of the local context. *)
+(* ================================================================= *)
+
+Module Type DataLCOkDef (Import D : DataLC). 
+  (* Element [t] must be ok with respect 
+     to global [ctx] and local [ctxloc] contexts. *) 
+  Parameter is_ok : ctx -> ctxloc -> t -> Prop.
+End DataLCOkDef.
+
+Module Type DataLCOkInterp (Import D : DataLC).
+  Parameter is_ok_b : ctx -> ctxloc -> t -> bool.
+End DataLCOkInterp.
+
+Module Type DataLCOkProp (Import D : DataLC) 
+       (Import DDef : DataLCOkDef D) (Import DInt : DataLCOkInterp D).
+
+  Axiom is_ok_b__sound : forall (c : ctx) (cl : ctxloc) (x : t),
+    is_ok_b c cl x = true -> is_ok c cl x.
+  
+  Axiom is_ok_b__complete : forall (c : ctx) (cl : ctxloc) (x : t),
+    is_ok c cl x -> is_ok_b c cl x = true.
+End DataLCOkProp.
+
+(* ================================================================= *)
+(** ** Module Types with Well-definedness 
+ ** of Single-Pass Implementation Modules *)
+(* ================================================================= *)
+
+Module Type DataLCIOkDef (Import MId : IdentifiersBase) (Import D : DataLCI). 
+  (* Element [t] must be ok with respect 
+     to global [ctx] and local [ctxloc] contexts. *) 
+  Parameter is_ok : ctx -> intrfs -> ctxloc -> id -> t -> Prop.
+End DataLCIOkDef.
+
+Module Type DataLCIOkInterp (Import MId : IdentifiersBase) (Import D : DataLCI).
+  Parameter is_ok_b : ctx -> intrfs -> ctxloc -> id -> t -> bool.
+End DataLCIOkInterp.
+
+Module Type DataLCIOkProp (Import MId : IdentifiersBase) (Import D : DataLCI) 
+       (Import DDef : DataLCIOkDef MId D) (Import DInt : DataLCIOkInterp MId D).
+
+  Axiom is_ok_b__sound : 
+    forall (c : ctx) (i : intrfs) (cl : ctxloc) (nm : id) (x : t),
+      is_ok_b c i cl nm x = true -> is_ok c i cl nm x.
+  
+  Axiom is_ok_b__complete : 
+    forall (c : ctx) (i : intrfs) (cl : ctxloc) (nm : id) (x : t),
+      is_ok c i cl nm x -> is_ok_b c i cl nm x = true.
+End DataLCIOkProp.
+
+
+(* ################################################################# *)
+(** ** Module Types for Modules *)
+(* ################################################################# *)
+
+Module Type ModuleBase.
+  Declare Module MId : IdentifiersBase.
+  Definition id := MId.id.
+  Definition id_set := MId.IdLS.id_set.
+  Definition id_map := MId.IdLPM.id_map.
+End ModuleBase.
+
+(* ################################################################# *)
+(** ** Shared Functionality of Module Checkers *)
+(* ################################################################# *)
+
+(* ================================================================= *)
+(** ** Generic Well-definedness of all Modules *)
+(* ================================================================= *)
+
+Module GenericModule_ModuleOk (Import MId : IdentifiersBase).
+Section GenericDefinitions.
+  
+  (** Type of members *)
+  Variable dt : Type.
+  (** Type of context *)
+  Variable ctx : Type.
+  
+  Variable members_ok : ctx -> list (id * dt) -> Prop.
+  Variable members_ok_b : ctx -> list (id * dt) -> bool.
+
+  Variable members_ok_b__sound : forall (c : ctx) (decls : list (id * dt)),
+    members_ok_b c decls = true -> members_ok c decls.
+  Variable members_ok_b__complete : forall (c : ctx) (decls : list (id * dt)),
+    members_ok c decls -> members_ok_b c decls = true.
+
+  Definition module_ok (c : ctx) (decls : list (id * dt)) : Prop :=
+    let nms := map fst decls in
+    (** all names are distinct *)
+    List.NoDup nms
+    (** and all members are valid *)
+    /\ members_ok c decls. 
+
+  Definition module_ok_b (c : ctx) (decls : list (id * dt)) : bool :=
+    let nms := map fst decls in
+    andb
+      (** all names are distinct *)
+      (MId.IdLS.ids_are_unique nms)
+      (** and all types are valid *)
+      (members_ok_b c decls).
+  
+  Theorem module_ok_b__sound : forall (c : ctx) (decls : list (id * dt)),
+      module_ok_b c decls = true ->
+      module_ok c decls.
+  Proof.
+    intros c ds. intros H.
+    unfold module_ok_b in H. 
+    unfold module_ok.
+    rewrite -> andb_true_iff in H. inversion H as [Hid Hds].
+    apply MId.IdLS.Props.ids_are_unique__sound in Hid.
+    apply members_ok_b__sound in Hds.
+    split; assumption.
+  Qed.
+
+  Theorem module_ok_b__complete : forall (c : ctx) (decls : list (id * dt)),
+      module_ok c decls ->
+      module_ok_b c decls = true.
+  Proof.
+    intros c ds. intros H.
+    unfold module_ok_b.
+    unfold module_ok in H.
+    inversion H as [Hdup Hmems].
+    rewrite -> andb_true_iff. split.
+    apply MId.IdLS.Props.ids_are_unique__complete in Hdup. assumption.
+    apply members_ok_b__complete. assumption.
+  Qed.  
+
+End GenericDefinitions.
+End GenericModule_ModuleOk.
+
+
+Module Type GenericModule_Data.
+  (** Type of members *)
+  Parameter dt : Type.
+  (** Type of context *)
+  Parameter ctx : Type.
+End GenericModule_Data.
+
+
 (* ================================================================= *)
 (** *** Single-Pass Modules *)
 (* ================================================================= *)
 
-Section SinglePass_ProcessMembers.
+Module SinglePassModule_ProcessMembers.
+Section GenericDefinitions.
 
 (* ----------------------------------------------------------------- *)
 (** **** Definitions and Functions *)
@@ -364,113 +536,13 @@ Section SinglePass_ProcessMembers.
       assumption. constructor.
     Qed.
 
-End SinglePass_ProcessMembers.
-
-(* ################################################################# *)
-(** ** Module Types - Parameters for Well-definedness of Modules *)
-(* ################################################################# *)
-
-(* ================================================================= *)
-(** ** Parameters of Well-definedness of Simple Modules *)
-
-(** In a _Simple Module_ all elements are checked independently 
- ** of each other: only global context matters. *)
-(* ================================================================= *)
-
-Module Type DataCOkDef (Import D : DataC).
-  Parameter is_ok : ctx -> t -> Prop.
-End DataCOkDef.
-
-Module Type DataCOkInterp (Import D : DataC).
-  Parameter is_ok_b : ctx -> t -> bool.
-End DataCOkInterp.
-
-Module Type DataCOkProp (Import D : DataC) 
-       (Import DDef : DataCOkDef D) (Import DInt : DataCOkInterp D).
-
-  Axiom is_ok_b__sound : forall (c : ctx) (x : t),
-      is_ok_b c x = true -> is_ok c x.
-  Axiom is_ok_b__complete : forall (c : ctx) (x : t),
-      is_ok c x -> is_ok_b c x = true.
-End DataCOkProp.
-
-(* ================================================================= *)
-(** ** Parameters of Well-definedness of Single-Pass Modules *)
-
-(** In a _Single-Pass Module_ following elements can refer to
- ** the previously defined ones by means of the local context. *)
-(* ================================================================= *)
-
-Module Type DataLCOkDef (Import D : DataLC). 
-  (* Element [t] must be ok with respect 
-     to global [ctx] and local [ctxloc] contexts. *) 
-  Parameter is_ok : ctx -> ctxloc -> t -> Prop.
-End DataLCOkDef.
-
-Module Type DataLCOkInterp (Import D : DataLC).
-  Parameter is_ok_b : ctx -> ctxloc -> t -> bool.
-End DataLCOkInterp.
-
-Module Type DataLCOkProp (Import D : DataLC) 
-       (Import DDef : DataLCOkDef D) (Import DInt : DataLCOkInterp D).
-
-  Axiom is_ok_b__sound : forall (c : ctx) (cl : ctxloc) (x : t),
-    is_ok_b c cl x = true -> is_ok c cl x.
-  
-  Axiom is_ok_b__complete : forall (c : ctx) (cl : ctxloc) (x : t),
-    is_ok c cl x -> is_ok_b c cl x = true.
-End DataLCOkProp.
-
-(* ================================================================= *)
-(** ** Module Types with Well-definedness 
- ** of Single-Pass Implementation Modules *)
-(* ================================================================= *)
-
-Module Type DataLCIOkDef (Import MId : IdentifiersBase) (Import D : DataLCI). 
-  (* Element [t] must be ok with respect 
-     to global [ctx] and local [ctxloc] contexts. *) 
-  Parameter is_ok : ctx -> intrfs -> ctxloc -> id -> t -> Prop.
-End DataLCIOkDef.
-
-Module Type DataLCIOkInterp (Import MId : IdentifiersBase) (Import D : DataLCI).
-  Parameter is_ok_b : ctx -> intrfs -> ctxloc -> id -> t -> bool.
-End DataLCIOkInterp.
-
-Module Type DataLCIOkProp (Import MId : IdentifiersBase) (Import D : DataLCI) 
-       (Import DDef : DataLCIOkDef MId D) (Import DInt : DataLCIOkInterp MId D).
-
-  Axiom is_ok_b__sound : 
-    forall (c : ctx) (i : intrfs) (cl : ctxloc) (nm : id) (x : t),
-      is_ok_b c i cl nm x = true -> is_ok c i cl nm x.
-  
-  Axiom is_ok_b__complete : 
-    forall (c : ctx) (i : intrfs) (cl : ctxloc) (nm : id) (x : t),
-      is_ok c i cl nm x -> is_ok_b c i cl nm x = true.
-End DataLCIOkProp.
+End GenericDefinitions.
+End SinglePassModule_ProcessMembers.
 
 
-(* ################################################################# *)
-(** ** Module Types for Modules *)
-(* ################################################################# *)
-
-Module Type ModuleBase.
-  Declare Module MId : IdentifiersBase.
-  Definition id := MId.id.
-  Definition id_set := MId.IdLS.id_set.
-  Definition id_map := MId.IdLPM.id_map.
-End ModuleBase.
 
 
-(* ################################################################# *)
-(** ** Generic Well-definedness of all Modules *)
-(* ################################################################# *)
 
-Module Type GenericModule_Data.
-  (** Type of members *)
-  Parameter dt : Type.
-  (** Type of context *)
-  Parameter ctx : Type.
-End GenericModule_Data.
 
 
 Module Type GenericModule_DataDefs (Import MId : IdentifiersBase) 

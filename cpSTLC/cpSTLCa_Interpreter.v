@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Thu, 19 Jan 2017
+   Last Update: Mon, 29 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -30,7 +30,10 @@ Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
-Require Import ConceptParams.GenericModuleLib.MIntrfs1.
+(*Require Import ConceptParams.GenericModuleLib.MIntrfs1.*)
+Require Import ConceptParams.GenericModuleLib.SimpleModule.
+Require Import ConceptParams.GenericModuleLib.SinglePassModule.
+Require Import ConceptParams.GenericModuleLib.SinglePassImplModule.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 
@@ -105,11 +108,21 @@ Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
 (** This part is using GenericModulesLib  *)
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
+Module MCptMem_DataCOkInterp <: DataCOkInterp MCptMem_DataC.
+  Definition is_ok_b := type_valid_b.
+End MCptMem_DataCOkInterp.
+
+(*
 Module ty_DataOkInterp <: DataOkInterp ty_Data.
   Definition is_ok_b := type_valid_b.
 End ty_DataOkInterp.
 
 Module conceptInterp := MIntrfs1Interp ty_Intrfs1Base ty_DataOkInterp.
+*)
+
+(** SimpleModule interpreter for checking concept members. *)
+Module MCptMem_Interp := SimpleModuleInterp 
+                           MCptMem_SimpleMBase MCptMem_DataCOkInterp.
 
 (** There is a problem: it's quite cumbersome to check 
     well-definedness of concept definitions in propositional style.
@@ -121,13 +134,12 @@ Module conceptInterp := MIntrfs1Interp ty_Intrfs1Base ty_DataOkInterp.
     To check this, we need an effective set of ids. 
     The one based on AVL trees is defined in [IdLS] module
     (this an instance of [MList2SetAVL : List2Set]).
+    We will further use the function [IdLS.ids_are_unique] to check 
+    name repetitions effectively.
 
-    And fortunately, this algo is used in MIntrfs1 computable block!
-    In [conceptInterp], namely.
+    And fortunately, this algo is used in SimpleModule computable block!
+    In [MCptMem_Interp], namely.
 *)
-
-(** We will further use the function [IdLS.ids_are_unique] to check 
-    name repetitions effectively. *)
 
 (** Now we are ready to define a function to check that 
     "concept is well defined" *)
@@ -136,7 +148,7 @@ Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
   match C with
     cpt_def cname cbody =>
     let pnds := map namedecl_to_pair cbody in
-    conceptInterp.intrfs_ok_b st pnds
+    MCptMem_Interp.module_ok_b st pnds
   end.
 
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
@@ -144,7 +156,8 @@ Definition concept_welldefined_b (st : cptcontext) (C : conceptdef) : bool :=
 (** And we now need an algorithmical way to find the type of a concept.
     We can use [IdLPM] machinery to convert lists into maps. *)
 
-Definition concept_type_check (cst : cptcontext) (C : conceptdef) : option cty :=
+Definition concept_type_check 
+           (cst : cptcontext) (C : conceptdef) : option cty :=
   if concept_welldefined_b cst C 
   then match C with cpt_def cname cbody =>
       let cbody' := map namedecl_to_pair cbody in
@@ -301,7 +314,25 @@ Definition model_defined_b (st : mdlcontext) (nm : id) : bool :=
     relation of member's validity. *)
 
 Definition model_member_valid_b (cst : cptcontext) (mst : mdlcontext)
-                                (fnmtys : id_ty_map) (nd : namedef) : bool :=
+                                (fnmtys : id_ty_map) (prevmems : id_ty_map)
+                                (nm : id) (t : tm) : bool :=
+
+  let Gamma := IdLPM.IdMap.fold 
+                 (fun nm tp ctx => update ctx nm (tmtype tp))
+                 prevmems ctxempty in
+  (** there is [nm : T] in a concept *)
+  match find_ty nm fnmtys with
+  | Some T =>
+    (** and [T] is a type of [t], that is 
+        [cst * mst ; Gamma |- t : T] *)
+    match type_check cst mst Gamma t with
+    | Some T' => if beq_ty T T' then true else false
+    | _ => false  
+    end
+  | _ => false
+  end.
+
+(*
   match nd with nm_def nm t =>
     (** there is [nm : T] in a concept *)
     match find_ty nm fnmtys with
@@ -311,9 +342,11 @@ Definition model_member_valid_b (cst : cptcontext) (mst : mdlcontext)
                   | _ => false  end
     | _ => false
   end end.
+*)
 
 (** And we define a function to check that "model is well defined". *)
 
+(*
 Definition model_welldefined_b (cst : cptcontext) (mst : mdlcontext) 
            (M : modeldef) : bool :=
   match M with 
@@ -349,10 +382,12 @@ Definition model_type_check (cst : cptcontext) (mst : mdlcontext)
   end
   else 
     None.
+*)
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Programs *)
 
+(*
 Definition conceptsec_welldefined_b (cptsec : conceptsec) : cptcontext * bool :=
 (* use fold_left to pass the right context along the check *)
   fold_left 
@@ -397,6 +432,7 @@ Definition program_type_check (cst : cptcontext) (mst : mdlcontext)
       else None
     else None
   end.
+*)
 
 
 (* ################################################################# *)

@@ -6,7 +6,7 @@
    Properties of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 22 May 2017
+   Last Update: Mon, 29 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -31,7 +31,10 @@ Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
-Require Import ConceptParams.GenericModuleLib.MIntrfs1.
+(*Require Import ConceptParams.GenericModuleLib.MIntrfs1.*)
+Require Import ConceptParams.GenericModuleLib.SimpleModule.
+Require Import ConceptParams.GenericModuleLib.SinglePassModule.
+Require Import ConceptParams.GenericModuleLib.SinglePassImplModule.
 
 Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 Require Import ConceptParams.cpSTLC.cpSTLCa_Interpreter.
@@ -214,6 +217,7 @@ Qed.
 (** This part is using GenericModulesLib  *)
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
+(*
 Module ty_DataOkProp <: DataOkProp ty_Data ty_DataOkDef ty_DataOkInterp.
   Definition is_ok_b__sound := type_valid_b__sound.
   Definition is_ok_b__complete := type_valid_b__complete.
@@ -222,6 +226,21 @@ End ty_DataOkProp.
 Module conceptProps := MIntrfs1Props 
                          ty_Intrfs1Base 
                          ty_DataOkDef ty_DataOkInterp ty_DataOkProp.
+*)
+
+Module MCptMem_DataCOkProp 
+<: DataCOkProp MCptMem_DataC MCptMem_DataCOkDef MCptMem_DataCOkInterp. 
+
+  Definition is_ok_b__sound := type_valid_b__sound.
+  Definition is_ok_b__complete := type_valid_b__complete.
+End MCptMem_DataCOkProp.
+
+(** SimpleModule proofs about checking concept members. *)
+Module MCptMem_Props := 
+  SimpleModuleProps MCptMem_SimpleMBase 
+                    MCptMem_DataCOkDef MCptMem_DataCOkInterp
+                    MCptMem_DataCOkProp.
+
 
 (* ----------------------------------------------------------------- *)
 (** **** Concept Well-definedness *)
@@ -236,7 +255,7 @@ Theorem concept_well_defined_b__sound : forall (cst : cptcontext) (C : conceptde
 Proof.
   intros cst C. intros H.
   destruct C as [nm body]. simpl in *. 
-  apply conceptProps.intrfs_ok_b__sound. assumption.
+  apply MCptMem_Props.module_ok_b__sound. assumption.
 Qed.
 
 Theorem concept_well_defined_b__complete : forall (cst : cptcontext) (C : conceptdef),
@@ -245,7 +264,7 @@ Theorem concept_well_defined_b__complete : forall (cst : cptcontext) (C : concep
 Proof.
   intros cst C. intros H.
   destruct C as [nm body]. simpl in *.
-  apply conceptProps.intrfs_ok_b__complete. assumption.
+  apply MCptMem_Props.module_ok_b__complete. assumption.
 Qed.
 
 (* ----------------------------------------------------------------- *)
@@ -296,11 +315,11 @@ Proof.
   intros cst C. 
   destruct C as [Cnm nmtps]. 
   unfold concept_has_type.
-  unfold concept_welldefined, conceptDefs.intrfs_ok.
-  destruct (split (map namedecl_to_pair nmtps)) as [nms tps] eqn:Heq.
-  (* For some reason, just [rewrite] cannot handle [split (map ...)] *)
-  intros CT CT'.
-  rewrite Heq at 1. rewrite Heq at 1.
+  unfold concept_welldefined, MCptMem_Defs.module_ok.
+(*  destruct (split (map namedecl_to_pair nmtps)) as [nms tps] eqn:Heq.
+  (* For some reason, just [rewrite] cannot handle [split (map ...)] *) *)
+  intros CT CT'. 
+(*  rewrite Heq at 1. rewrite Heq at 1. *)
   intros HCT HCT'. propositional.
   apply IdLPM.Props.eq_list_map__same_list__eq_maps
   with (ps := map namedecl_to_pair nmtps);
@@ -340,12 +359,11 @@ Proof.
   *)
   (* So we do a bit roundabout proof... *)
   unfold concept_welldefined_b in *.
-  unfold conceptInterp.intrfs_ok_b in *.
-  destruct (split (map namedecl_to_pair nds)) as [nms tps] eqn:Heq.
-  rewrite Heq in HCdef at 1. 
+  unfold MCptMem_Interp.module_ok_b, 
+  MCptMem_Interp.HelperI.MGM.module_ok_b in *.
   rewrite andb_true_iff in HCdef. inversion HCdef as [Hun Hok].
   apply IdLS.Props.ids_are_unique__sound in Hun.
-  apply split_fst__map_fst in Heq. subst. assumption.
+  assumption.
 Qed.
 
 (** Here is the main [concept_type_check] completeness theorem. *)
@@ -499,7 +517,7 @@ End HelperProgress.
 
 
 Theorem progress : forall CTbl MTbl t T,
-     CTbl $ MTbl ; ctxempty |- t \in T ->
+     CTbl $ MTbl ; ctxempty ||- t \in T ->
      value t \/ exists t', CTbl $ MTbl ; t #==> t'.
 Proof.
   intros CTbl MTbl.
@@ -507,6 +525,8 @@ Proof.
   (* [remember] is a technical moment: otherwise information 
      about emptiness of Gamma is lost. *)
   remember ctxempty as Gamma.
+  unfold has_type_WD in HT.
+  destruct HT as [HCTOk [HMTOk HT]].
   induction HT; subst Gamma; eauto.
 (* tvar *)
   - (* var cannot be typed in empty context*) 
@@ -552,8 +572,16 @@ Proof.
   - (* method invocation makes a step to its body *)
     right.
     (* For this we actually need model table correctness *)
-
-
+    unfold mdlcontext_welldefined in HMTOk.
+    destruct HMTOk as [mdls [HmdlsOk HmdlsMty]].
+    unfold modelsec_welldefined in HmdlsOk.
+    unfold MMdlDef_SinglePassMDefs.module_ok in HmdlsOk.
+    unfold MMdlDef_SinglePassMDefs.HelperD.MGM.module_ok in HmdlsOk.
+    destruct HmdlsOk as [Hdup Hmems].
+    unfold MMdlDef_SinglePassMDefs.HelperD.members_ok in Hmems.
+    unfold MMdlDef_SinglePassMDefs.HelperD.MSP.members_ok in Hmems.
+    unfold MMdlDef_SinglePassMDefs.HelperD.MSP.members_ok' in Hmems.
+    remember (IdLPM.IdMap.find f Mbody) as ftm'.
 
 Abort.
 

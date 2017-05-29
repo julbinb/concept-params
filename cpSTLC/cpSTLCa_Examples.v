@@ -301,7 +301,7 @@ Module TestConcepts1.
     - (* NoDup *)
       solve_NoDup_true 3.
     - (* All types valid *)
-      unfold conceptDefs.HelperD.types_ok.
+      unfold MCptMem_Defs.HelperD.members_ok.
       repeat constructor.
   Qed.
 End TestConcepts1.

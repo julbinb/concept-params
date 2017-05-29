@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Fri, 12 May 2017
+   Last Update: Mon, 28 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -33,7 +33,8 @@ Require Import ConceptParams.SetMapLib.List2Set.
 Require Import ConceptParams.SetMapLib.ListPair2FMap.
 
 Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
-Require Import ConceptParams.GenericModuleLib.MIntrfs1.
+(*Require Import ConceptParams.GenericModuleLib.MIntrfs1.*)
+Require Import ConceptParams.GenericModuleLib.SimpleModule.
 Require Import ConceptParams.GenericModuleLib.SinglePassModule.
 Require Import ConceptParams.GenericModuleLib.SinglePassImplModule.
 
@@ -406,8 +407,36 @@ Hint Constructors type_valid.
 (** This part is using GenericModulesLib  *)
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
-(** Here we are going to use MIntrfs1 generic module. *)
+Module IdModuleBase <: ModuleBase.
+  Module MId := MId.
+  Definition id := MId.id.
+  Definition id_set := MId.IdLS.id_set.
+  Definition id_map := MId.IdLPM.id_map.
+End IdModuleBase.
 
+(** Here we are going to use SimpleModule generic module
+    to check concept definitions. *)
+
+Module MCptMem_DataC <: DataC.
+  (** Type of Data *)
+  Definition t := ty.
+  (** Type of Context  *)
+  Definition ctx := cptcontext.
+End MCptMem_DataC.
+
+Module MCptMem_DataCOkDef <: DataCOkDef MCptMem_DataC.
+  Definition is_ok := type_valid.
+End MCptMem_DataCOkDef.
+
+Module MCptMem_SimpleMBase <: SimpleModuleBase.
+  Include IdModuleBase.
+
+  Module MD := MCptMem_DataC.
+(*  Definition dt := MD.t.
+  Definition ctx := MD.ctx. *)
+End MCptMem_SimpleMBase.
+
+(*
 Module ty_Data <: Data.
   Definition t := ty.
   Definition ctx := cptcontext.
@@ -431,7 +460,9 @@ Module MIdBase <: IdentifiersBase.
 
   Definition id := id.
 End MIdBase.
+*)
 
+(*
 Module ty_Intrfs1Base <: Intrfs1Base.
   Include MIdBase.
 
@@ -447,6 +478,10 @@ Module ty_Intrfs1Base <: Intrfs1Base.
 End ty_Intrfs1Base.
 
 Module conceptDefs := MIntrfs1Defs ty_Intrfs1Base ty_DataOkDef.
+*)
+
+(** SimpleModule definitions for checking concept members. *)
+Module MCptMem_Defs := SimpleModuleDefs MCptMem_SimpleMBase MCptMem_DataCOkDef.
 
 (** Now we are ready to define a property "concept is well defined" *)
 
@@ -454,7 +489,7 @@ Definition concept_welldefined (st : cptcontext) (C : conceptdef) : Prop :=
   match C with
     cpt_def cname cbody =>
     let pnds := map namedecl_to_pair cbody in
-    conceptDefs.intrfs_ok st pnds
+    MCptMem_Defs.module_ok st pnds
   end.
 Hint Unfold concept_welldefined.
 
@@ -472,20 +507,29 @@ Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Pro
      IdLPM.eq_list_map pnds cnmtys
      end end.
 
-(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
+(** Concept section (list of concept definitions) must also be well-formed. 
+    As further concept definitions can refer to previously defined ones,
+    we need SinglePass Module Machinery.
+ *)
 
-
-(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
-(* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
-
-(** Now we have to check that all concepts are well-defined.
-    Later defined concepts can refer to the previously defined ones.
-    Thus, we can use SinglePassModule for this. *)
+(*
+Definition conceptsec_welldefined (cptsec : conceptsec) (cst : cptcontext) : Prop :=
+  (*Forall (fun (C : conceptdef) => concept_welldefined cst C) cptsec
+  /\ Forall (fun (C : conceptdef) => cst (conceptdef__get_name C) <> None) cptsec*)
+  Forall (fun (C : conceptdef) => 
+            (concept_welldefined cst C)
+            /\ (exists (CT : cty),
+                   (* concept symb. table contains info about type of C *)
+                   IdLPM.IdMap.find (conceptdef__get_name C) cst = Some CT 
+                   (* and C indeed has this type *)
+                   /\ concept_has_type cst C CT)
+         ) cptsec. 
+*)
 
 Module MCptDef_DataLC <: DataLC.
   (** One concept definition is a member in this case. *)
   Definition t := conceptdef.
-  (** We have no global context. *)
+  (** We have no global context, only local. *)
   Definition ctx := unit.
   (** Local context contains information about previously defined 
       concepts. *)
@@ -497,23 +541,13 @@ Module MCptDef_DataLCOkDef <: DataLCOkDef MCptDef_DataLC.
     := concept_welldefined cl cpt.
 End MCptDef_DataLCOkDef.
 
-Module IdModuleBase <: ModuleBase.
-  Module MId := MIdBase.
-  Definition id := MId.id.
-  Definition id_set := MId.IdLS.id_set.
-  Definition id_map := MId.IdLPM.id_map.
-End IdModuleBase.
-
-Module IdSinglePassModuleBase <: SinglePassModuleBase.
+Module MCptDef_SinglePassMBase <: SinglePassModuleBase.
   Include IdModuleBase.
   
   Module MD := MCptDef_DataLC.
-  Definition dt := MD.t.
-  Definition ctx := MD.ctx.
-  Definition ctxloc := MD.ctxloc.
 
   (** Initial local context *)
-  Definition ctxl_init : ctxloc := cstempty.
+  Definition ctxl_init : cptcontext := cstempty.
 
   (** Update local context *)
   Definition upd_ctxloc (cl : cptcontext) (c : unit) 
@@ -526,10 +560,10 @@ Module IdSinglePassModuleBase <: SinglePassModuleBase.
       IdLPM.IdMap.add Cname (CTdef (IdLPM.map_from_list nmtys)) cl
     end.
 
-End IdSinglePassModuleBase.
+End MCptDef_SinglePassMBase.
 
-Module MCptDef_SPMDefs := 
-  SinglePassModuleDefs IdSinglePassModuleBase MCptDef_DataLCOkDef.
+Module MCptDef_SinglePassMDefs := 
+  SinglePassModuleDefs MCptDef_SinglePassMBase MCptDef_DataLCOkDef.
 
 Definition conceptdef_pair_with_id (C : conceptdef) : id * conceptdef :=
   match C with cpt_def Cname _ => (Cname, C)  end.
@@ -537,7 +571,7 @@ Definition conceptdef_pair_with_id (C : conceptdef) : id * conceptdef :=
 (** What it means for a concept section to be well-defined. *)
 Definition conceptsec_welldefined (cpts : conceptsec) : Prop :=
   let pcpts := map conceptdef_pair_with_id cpts in
-  MCptDef_SPMDefs.module_ok tt pcpts.
+  MCptDef_SinglePassMDefs.module_ok tt pcpts.
 
 Definition conceptdef_to_cty (C : conceptdef) : cty :=
   match C with 
@@ -560,8 +594,9 @@ Definition conceptdef_to_pair_id_cty (C : conceptdef) : id * cty :=
  ** equal to the concept context.*)
 Definition cptcontext_welldefined (cst : cptcontext) : Prop :=
   exists (cpts : conceptsec),
-    let pctys := map conceptdef_to_pair_id_cty cpts in
-    IdLPM.IdMap.Equal cst (IdLPM.map_from_list pctys).
+    conceptsec_welldefined cpts
+    /\ let pctys := map conceptdef_to_pair_id_cty cpts in
+       IdLPM.IdMap.Equal cst (IdLPM.map_from_list pctys).
                                                             
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 
@@ -836,7 +871,8 @@ Definition model_member_valid (cst : cptcontext) (mst : mdlcontext)
   exists (T : ty),
     (** there is [nm : T] in a concept *)
     find_ty nm cpt = Some T
-    (** and [T] is a type of [t], that is [cst * mst ; empty |- t : T] *)
+    (** and [T] is a type of [t], that is 
+        [cst * mst ; local_ctx |- t : T] *)
     /\ has_type cst mst local_ctx t T.
 
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
@@ -846,16 +882,15 @@ Definition model_member_valid (cst : cptcontext) (mst : mdlcontext)
 (** Here we are going to use [SinglePassImplModule] generic module. *)
 
 Module MMdlMem_DataLCI <: DataLCI.  
-  (** Type of Data *)
+  (** Type of Data -- term *)
   Definition t := tm.
-  (** Type of Context (might be needed for checking WD of [t]).
+  (** Type of Context needed for checking WD of terms.
       We need both concept and model table. *)
   Definition ctx := (cptcontext * mdlcontext) % type. 
-  (** Type of Local Context which might also be needed
-   ** for checking WD of [t] 
-      (here we need types of previously defined members *)
+  (** Type of Local Context which is needed for checking WD of terms
+      (here we need types of previously defined members). *)
   Definition ctxloc := id_ty_map.
-  (** Type of Concept *)
+  (** Type of Concept representation in symbol table *)
   Definition intrfs := id_ty_map.
 End MMdlMem_DataLCI.
 
@@ -869,14 +904,14 @@ Module MMdlMem_DataLCIOkDef <: DataLCIOkDef MId MMdlMem_DataLCI.
        model_member_valid c m cpt prevmems nm t.
 End MMdlMem_DataLCIOkDef.
 
-Module MMdlMem_SinglePassImplModuleBase <: SinglePassImplModuleBase.
+Module MMdlMem_SinglePassImplMBase <: SinglePassImplModuleBase.
   Include IdModuleBase.
 
   Module MD := MMdlMem_DataLCI.
-  Definition dt := MD.t.
+(*  Definition dt := MD.t.
   Definition ctx := MD.ctx.
   Definition ctxloc := MD.ctxloc.
-  Definition intrfs := MD.intrfs.
+  Definition intrfs := MD.intrfs. *)
 
   (** Initial local context *)
   Definition ctxl_init := IdLPM.IdMap.empty ty.
@@ -892,13 +927,36 @@ Module MMdlMem_SinglePassImplModuleBase <: SinglePassImplModuleBase.
   Definition members_to_define (cpt : id_ty_map) : list id 
     := map fst (IdLPM.IdMap.elements cpt).
 
-End MMdlMem_SinglePassImplModuleBase.
+End MMdlMem_SinglePassImplMBase.
 
-Module MMdlMem_SinglePassImplModuleDefs :=
-  SinglePassImplModuleDefs MMdlMem_SinglePassImplModuleBase MMdlMem_DataLCIOkDef. 
+Module MMdlMem_SinglePassImplMDefs :=
+  SinglePassImplModuleDefs MMdlMem_SinglePassImplMBase MMdlMem_DataLCIOkDef. 
 
 (** Now we are ready to formally define what it means for a model
     to be well-defined. *)
+
+Definition model_welldefined 
+           (cst : cptcontext) (mst : mdlcontext) (M : modeldef) : Prop 
+  := match M with 
+       mdl_def mname C mbody =>
+       let decls := map namedef_to_pair mbody in
+       (** concept [C] is defined in symbol table, 
+           and model is ok with respect to this concept *)
+       exists (fnmtys : id_ty_map), 
+         IdLPM.IdMap.find C cst = Some (CTdef fnmtys)
+         /\ MMdlMem_SinglePassImplMDefs.module_ok (cst, mst) fnmtys decls
+     end.
+
+Definition model_has_type (cst : cptcontext) (mst : mdlcontext) 
+           (M : modeldef) (MT : mty) : Prop :=
+  (** model def must be well-defined *)
+  model_welldefined cst mst M
+  /\ match MT with MTdef _ mnmtms =>
+     match M with mdl_def _ _ mbody =>
+     let pnds := map namedef_to_pair mbody in
+  (** and the map [mnmtms] has to be equal to the AST [mbody] *)
+     IdLPM.eq_list_map pnds mnmtms
+     end end.
 
 (*
 Definition model_welldefined (cst : cptcontext) (mst : mdlcontext) (M : modeldef) : Prop :=
@@ -939,9 +997,10 @@ Definition model_has_type (cst : cptcontext) (mst : mdlcontext)
   (** amount of model members is the same as in the model type *)
         /\ List.length mbody = IdLPM.IdMap.cardinal mnmtms
       end end.
+*)
 
 (** _Note!_ No evaluation is applied to model members (terms). 
-    So model members have to be exactly reflected in the model type,
+    So model members have to be exactly reflected in the model type
     that is have exactly the same syntactic structure.  *)
 
 (* ----------------------------------------------------------------- *)
@@ -953,28 +1012,91 @@ Definition model_has_type (cst : cptcontext) (mst : mdlcontext)
 
 (* Inductive program : Type :=  tprog : conceptsec -> modelsec -> tm -> program *)
 
-(** First, concept section (list of concept definitions) is to be 
-    well-formed. 
-    That is there is a symbol table of concepts such that
-    - all concepts in the section are well-defined against it;
-    - symbol table contains appropriate concept types. *)
+(** We can again use Single-Pass Modules to define well-definedness 
+    of model section. *)
+
+Module MMdlDef_DataLC <: DataLC.
+  (** One model definition is a member of models section. *)
+  Definition t := modeldef.
+  (** Global context in this case is concept symbol table. *)
+  Definition ctx := cptcontext.
+  (** Local context contains information about previously defined 
+      models. *)
+  Definition ctxloc := mdlcontext.
+End MMdlDef_DataLC.
+
+Module MMdlDef_DataLCOkDef <: DataLCOkDef MMdlDef_DataLC.
+  Definition is_ok (c : cptcontext) (cl : mdlcontext) (mdl : modeldef) : Prop 
+    := model_welldefined c cl mdl.
+End MMdlDef_DataLCOkDef.
+
+Module MMdlDef_SinglePassMBase <: SinglePassModuleBase.
+  Include IdModuleBase.
+  
+  Module MD := MMdlDef_DataLC.
+(*  Definition dt := MD.t.
+  Definition ctx := MD.ctx.
+  Definition ctxloc := MD.ctxloc. *)
+
+  (** Initial local context *)
+  Definition ctxl_init : mdlcontext := mstempty.
+
+  (** Update local context *)
+  Definition upd_ctxloc (cl : mdlcontext) (c : cptcontext) 
+             (nm : id) (mdl : modeldef) : mdlcontext :=
+    match mdl with 
+      mdl_def Mname C Mbody =>
+      let nmtms := map namedef_to_pair Mbody in
+      (* convert declarations into finite map, 
+         and add this map into the context *)
+      IdLPM.IdMap.add Mname (MTdef C (IdLPM.map_from_list nmtms)) cl
+    end.
+
+End MMdlDef_SinglePassMBase.
+
+Module MMdlDef_SinglePassMDefs := 
+  SinglePassModuleDefs MMdlDef_SinglePassMBase MMdlDef_DataLCOkDef.
+
+Definition modeldef_pair_with_id (M : modeldef) : id * modeldef :=
+  match M with mdl_def Mname _ _ => (Mname, M)  end.
+
+(** What it means for a model section to be well-defined. *)
+Definition modelsec_welldefined 
+           (cst : cptcontext) (mdls : modelsec) : Prop :=
+  let pmdls := map modeldef_pair_with_id mdls in
+  MMdlDef_SinglePassMDefs.module_ok cst pmdls.
 
 (*
-Definition conceptsec_welldefined (cptsec : conceptsec) (cst : cptcontext) : Prop :=
-  (*Forall (fun (C : conceptdef) => concept_welldefined cst C) cptsec
-  /\ Forall (fun (C : conceptdef) => cst (conceptdef__get_name C) <> None) cptsec*)
-  Forall (fun (C : conceptdef) => 
-            (concept_welldefined cst C)
-            /\ (exists (CT : cty),
-                   (* concept symb. table contains info about type of C *)
-                   IdLPM.IdMap.find (conceptdef__get_name C) cst = Some CT 
-                   (* and C indeed has this type *)
-                   /\ concept_has_type cst C CT)
-         ) cptsec. 
+Definition modeldef_to_mty (M : modeldef) : mty :=
+  match M with 
+    mdl_def Mname C Mbody => 
+    let nmtms := map namedef_to_pair Mbody in
+    MTdef C (IdLPM.map_from_list nmtms) 
+  end.
 *)
 
-(** First, model section (list of model definitions) is also 
-    to be well-formed. 
+Definition namedef_list_to_mty (C : id) (defs : namedef_list) : mty :=
+  let nmtms := map namedef_to_pair defs in
+  MTdef C (IdLPM.map_from_list nmtms).
+
+Definition modeldef_to_pair_id_mty (M : modeldef) : id * mty :=
+  match M with 
+    mdl_def Mname C Mbody => (Mname, namedef_list_to_mty C Mbody)  
+  end.
+
+(** What it means for a model context to be well-defined 
+ ** in the given concept context. 
+ ** [mst] is well-defined if exists a well-defined AST
+ ** equal to the model context.*)
+Definition mdlcontext_welldefined 
+           (cst : cptcontext) (mst : mdlcontext) : Prop :=
+  exists (mdls : modelsec),
+    modelsec_welldefined cst mdls 
+    /\ let pmtys := map modeldef_to_pair_id_mty mdls in
+       IdLPM.IdMap.Equal mst (IdLPM.map_from_list pmtys).
+
+(*
+(** Model section (list of model definitions) has to be well-formed. 
     That is there is a symbol table of models such that
     - all models in the section are well-defined against it;
     - symbol table contains appropriate concept types. *)
@@ -990,10 +1112,12 @@ Definition modelsec_welldefined
                    (* and M indeed has this type *)
                    /\ model_has_type cst mst M MT)
          ) mdlsec.
+*)
 
-(** And, finally, we can define what it means for the whole _program_
+(** Finally, we can define what it means for the whole _program_
     to be well-typed (correct). *)
 
+(*
 Definition program_has_type (cst : cptcontext) (mst : mdlcontext)
            (prg : program) (T : ty) : Prop :=
   match prg with tprog cptsec mdlsec t =>
@@ -1006,6 +1130,21 @@ Definition program_has_type (cst : cptcontext) (mst : mdlcontext)
   end.
 
 *)
+
+
+(** Now we can define a typing judgement where all 
+    components are well-defined. *)
+
+Definition has_type_WD 
+           (cst : cptcontext) (mst : mdlcontext)
+           (Gamma : context) (t : tm) (T : ty) : Prop :=
+  cptcontext_welldefined cst
+  /\ mdlcontext_welldefined cst mst
+  /\ has_type cst mst Gamma t T.
+
+Notation "CTable '$' MTable ';' Gamma '||-' t '\in' T" 
+  := (has_type_WD CTable MTable Gamma t T) (at level 50) : stlca_scope.
+
 
 (* ################################################################# *)
 (** ** Operational Semantics *)
