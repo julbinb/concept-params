@@ -41,9 +41,6 @@ Module Type SinglePassModuleBase.
 
   Declare Module MD : DataLC.
   Import MD.
-(*  Definition dt := MD.t.
-  Definition ctx := MD.ctx.
-  Definition ctxloc := MD.ctxloc. *)
 
   (** Initial local context *)
   Parameter ctxl_init : ctxloc.
@@ -51,14 +48,6 @@ Module Type SinglePassModuleBase.
   Parameter upd_ctxloc : ctxloc -> ctx -> id -> t -> ctxloc.
 End SinglePassModuleBase.
 
-(*
-Module SinglePassModule_Data (MMB : SinglePassModuleBase) 
-<: GenericModule_Data. 
-
-  Definition dt := MMB.dt.
-  Definition ctx := MMB.ctx.
-End SinglePassModule_Data.
-*)
 
 (* ################################################################# *)
 (** ** Propositional Part *)
@@ -87,7 +76,6 @@ Module SinglePassModuleDefs (Import MMB : SinglePassModuleBase)
       := match decl with (nm, d) => upd_ctxloc cl c nm d end.
 
     (** We can use generic implementation of module-welldefinedness *)
-    (*Module MD := SinglePassModule_Data MMB.*)
     Module MSP := SinglePassModule_ProcessMembers.
     Module MGM := GenericModule_ModuleOk MId.
 
@@ -124,7 +112,6 @@ Module SinglePassModuleInterp (Import MMB : SinglePassModuleBase)
                (decl : id * dt) : ctxloc
       := match decl with (nm, d) => upd_ctxloc cl c nm d end.
 
-    (*Module MD := SinglePassModule_Data MMB.*)
     Module MSP := SinglePassModule_ProcessMembers.
     Module MGM := GenericModule_ModuleOk MId.
 
@@ -196,7 +183,6 @@ Module SinglePassModuleProps
 
 (* ----------------------------------------------------------------- *)
 
-(*    Module MD := SinglePassModule_Data MMB. *)
     Module MSP := SinglePassModule_ProcessMembers.
     Module MGM := GenericModule_ModuleOk MId.
 

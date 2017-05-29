@@ -30,7 +30,6 @@ Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
-(*Require Import ConceptParams.GenericModuleLib.MIntrfs1.*)
 Require Import ConceptParams.GenericModuleLib.SimpleModule.
 Require Import ConceptParams.GenericModuleLib.SinglePassModule.
 Require Import ConceptParams.GenericModuleLib.SinglePassImplModule.
@@ -111,14 +110,6 @@ Fixpoint type_valid_b (st : cptcontext) (t : ty) : bool :=
 Module MCptMem_DataCOkInterp <: DataCOkInterp MCptMem_DataC.
   Definition is_ok_b := type_valid_b.
 End MCptMem_DataCOkInterp.
-
-(*
-Module ty_DataOkInterp <: DataOkInterp ty_Data.
-  Definition is_ok_b := type_valid_b.
-End ty_DataOkInterp.
-
-Module conceptInterp := MIntrfs1Interp ty_Intrfs1Base ty_DataOkInterp.
-*)
 
 (** SimpleModule interpreter for checking concept members. *)
 Module MCptMem_Interp := SimpleModuleInterp 
@@ -331,18 +322,6 @@ Definition model_member_valid_b (cst : cptcontext) (mst : mdlcontext)
     end
   | _ => false
   end.
-
-(*
-  match nd with nm_def nm t =>
-    (** there is [nm : T] in a concept *)
-    match find_ty nm fnmtys with
-    (** and [T] is a type of [t], that is [cst * mst ; empty |- t : T] *)
-    | Some T => match type_check cst mst ctxempty t with
-                  | Some T' => if beq_ty T T' then true else false
-                  | _ => false  end
-    | _ => false
-  end end.
-*)
 
 (** And we define a function to check that "model is well defined". *)
 

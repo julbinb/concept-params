@@ -31,7 +31,6 @@ Require Import ConceptParams.AuxTactics.LibTactics.
 Require Import ConceptParams.AuxTactics.BasicTactics.
 
 Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
-(*Require Import ConceptParams.GenericModuleLib.MIntrfs1.*)
 Require Import ConceptParams.GenericModuleLib.SimpleModule.
 Require Import ConceptParams.GenericModuleLib.SinglePassModule.
 Require Import ConceptParams.GenericModuleLib.SinglePassImplModule.
@@ -216,17 +215,6 @@ Qed.
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 (** This part is using GenericModulesLib  *)
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
-
-(*
-Module ty_DataOkProp <: DataOkProp ty_Data ty_DataOkDef ty_DataOkInterp.
-  Definition is_ok_b__sound := type_valid_b__sound.
-  Definition is_ok_b__complete := type_valid_b__complete.
-End ty_DataOkProp.
-
-Module conceptProps := MIntrfs1Props 
-                         ty_Intrfs1Base 
-                         ty_DataOkDef ty_DataOkInterp ty_DataOkProp.
-*)
 
 Module MCptMem_DataCOkProp 
 <: DataCOkProp MCptMem_DataC MCptMem_DataCOkDef MCptMem_DataCOkInterp. 

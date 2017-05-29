@@ -37,10 +37,7 @@ Require Import Coq.Structures.Equalities.
 
 Module Type SimpleModuleBase.
   Include ModuleBase.
-
   Declare Module MD : DataC.
-  (*Definition dt := MD.t.
-  Definition ctx := MD.ctx.*)
 End SimpleModuleBase.
 
 

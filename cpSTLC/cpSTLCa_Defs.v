@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 28 May 2017
+   Last Update: Mon, 29 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -33,7 +33,6 @@ Require Import ConceptParams.SetMapLib.List2Set.
 Require Import ConceptParams.SetMapLib.ListPair2FMap.
 
 Require Import ConceptParams.GenericModuleLib.SharedDataDefs.
-(*Require Import ConceptParams.GenericModuleLib.MIntrfs1.*)
 Require Import ConceptParams.GenericModuleLib.SimpleModule.
 Require Import ConceptParams.GenericModuleLib.SinglePassModule.
 Require Import ConceptParams.GenericModuleLib.SinglePassImplModule.
@@ -432,53 +431,7 @@ Module MCptMem_SimpleMBase <: SimpleModuleBase.
   Include IdModuleBase.
 
   Module MD := MCptMem_DataC.
-(*  Definition dt := MD.t.
-  Definition ctx := MD.ctx. *)
 End MCptMem_SimpleMBase.
-
-(*
-Module ty_Data <: Data.
-  Definition t := ty.
-  Definition ctx := cptcontext.
-End ty_Data.
- 
-Module ty_DataOkDef <: DataOkDef ty_Data.
-  Definition is_ok := type_valid.
-End ty_DataOkDef.
-
-(** Identifier Data Module *)
-Module MIdBase <: IdentifiersBase.
-  Module IdDT  := IdLS'.M.IdDT.
-  Module IdSET := IdLS'.IdSetAVL.
-  Module IdLS := IdLS.
-
-  Module IdDT' := IdLPM'.M.IdDT. 
-  Module IdMAP := IdLPM'.IdMapAVL.
-  Module IdLPM := IdLPM.
-
-  Module TyDT := ty_Data.
-
-  Definition id := id.
-End MIdBase.
-*)
-
-(*
-Module ty_Intrfs1Base <: Intrfs1Base.
-  Include MIdBase.
-
-  Definition ty := ty.
-  Definition ctx := cptcontext.
-
-  Definition intrfs_ast := list (id * ty).
-  Definition intrfs_map := IdLPM.id_map ty.
-
-  (* All members of an interface have to be defined *)
-  Definition members_to_define (imap : intrfs_map) : list id :=
-    map fst (IdLPM.IdMap.elements imap).
-End ty_Intrfs1Base.
-
-Module conceptDefs := MIntrfs1Defs ty_Intrfs1Base ty_DataOkDef.
-*)
 
 (** SimpleModule definitions for checking concept members. *)
 Module MCptMem_Defs := SimpleModuleDefs MCptMem_SimpleMBase MCptMem_DataCOkDef.
@@ -511,20 +464,6 @@ Definition concept_has_type (cst : cptcontext) (C : conceptdef) (CT : cty) : Pro
     As further concept definitions can refer to previously defined ones,
     we need SinglePass Module Machinery.
  *)
-
-(*
-Definition conceptsec_welldefined (cptsec : conceptsec) (cst : cptcontext) : Prop :=
-  (*Forall (fun (C : conceptdef) => concept_welldefined cst C) cptsec
-  /\ Forall (fun (C : conceptdef) => cst (conceptdef__get_name C) <> None) cptsec*)
-  Forall (fun (C : conceptdef) => 
-            (concept_welldefined cst C)
-            /\ (exists (CT : cty),
-                   (* concept symb. table contains info about type of C *)
-                   IdLPM.IdMap.find (conceptdef__get_name C) cst = Some CT 
-                   (* and C indeed has this type *)
-                   /\ concept_has_type cst C CT)
-         ) cptsec. 
-*)
 
 Module MCptDef_DataLC <: DataLC.
   (** One concept definition is a member in this case. *)
@@ -572,13 +511,6 @@ Definition conceptdef_pair_with_id (C : conceptdef) : id * conceptdef :=
 Definition conceptsec_welldefined (cpts : conceptsec) : Prop :=
   let pcpts := map conceptdef_pair_with_id cpts in
   MCptDef_SinglePassMDefs.module_ok tt pcpts.
-
-Definition conceptdef_to_cty (C : conceptdef) : cty :=
-  match C with 
-    cpt_def Cname Cbody => 
-    let nmtys := map namedecl_to_pair Cbody in
-    CTdef (IdLPM.map_from_list nmtys) 
-  end.
 
 Definition namedecl_list_to_cty (decls : namedecl_list) : cty :=
   let nmtys := map namedecl_to_pair decls in
@@ -908,10 +840,6 @@ Module MMdlMem_SinglePassImplMBase <: SinglePassImplModuleBase.
   Include IdModuleBase.
 
   Module MD := MMdlMem_DataLCI.
-(*  Definition dt := MD.t.
-  Definition ctx := MD.ctx.
-  Definition ctxloc := MD.ctxloc.
-  Definition intrfs := MD.intrfs. *)
 
   (** Initial local context *)
   Definition ctxl_init := IdLPM.IdMap.empty ty.
@@ -947,6 +875,8 @@ Definition model_welldefined
          /\ MMdlMem_SinglePassImplMDefs.module_ok (cst, mst) fnmtys decls
      end.
 
+(** And we also need typing relation for models. *)
+
 Definition model_has_type (cst : cptcontext) (mst : mdlcontext) 
            (M : modeldef) (MT : mty) : Prop :=
   (** model def must be well-defined *)
@@ -958,46 +888,7 @@ Definition model_has_type (cst : cptcontext) (mst : mdlcontext)
      IdLPM.eq_list_map pnds mnmtms
      end end.
 
-(*
-Definition model_welldefined (cst : cptcontext) (mst : mdlcontext) (M : modeldef) : Prop :=
-  match M with 
-    mdl_def mname C mbody =>
-    let (fnames, fterms) := split (map namedef_to_pair mbody) in
-    (** concept is defined in symbol table *)
-    concept_defined cst C
-    (** fnmtys is a map from C ids to their types *)
-    /\ (exists fnmtys : id_ty_map, IdLPM.IdMap.find C cst = Some (CTdef fnmtys)
-    (** model members are the same as concept members *)
-       /\ let fnmtys_list := IdLPM.IdMap.elements fnmtys in
-          let Cfnames := List.map fst fnmtys_list in
-          IdLS.IdSet.Equal (IdLS.set_from_list fnames) (IdLS.set_from_list Cfnames)
-    (** types of model member terms conincide with 
-        concept member types *)
-       /\ List.Forall (model_member_valid cst mst fnmtys) mbody
-    (** amount of concept members is the same as model members
-        (together with previous condition it means that 
-        all concept members are defined correctly in a model) *)     
-       /\ IdLPM.IdMap.cardinal fnmtys = List.length mbody)
-  end.
 Hint Unfold model_welldefined.
-
-(** And we also need typing relation for models. *)
-
-Definition model_has_type (cst : cptcontext) (mst : mdlcontext) 
-           (M : modeldef) (MT : mty) : Prop :=
-  (** model def must be well-defined *)
-  model_welldefined cst mst M
-  /\  match M  with mdl_def mname C mbody =>
-      match MT with MTdef C' mnmtms =>   
-  (** a concept defined by the model coincides with the concept in the type *)
-        C = C'
-  (** all model members are reflected in the model type *)      
-        /\ List.Forall (fun nmdef => match nmdef with nm_def f t =>
-                        find_tm f mnmtms = Some t end) mbody
-  (** amount of model members is the same as in the model type *)
-        /\ List.length mbody = IdLPM.IdMap.cardinal mnmtms
-      end end.
-*)
 
 (** _Note!_ No evaluation is applied to model members (terms). 
     So model members have to be exactly reflected in the model type
@@ -1034,9 +925,6 @@ Module MMdlDef_SinglePassMBase <: SinglePassModuleBase.
   Include IdModuleBase.
   
   Module MD := MMdlDef_DataLC.
-(*  Definition dt := MD.t.
-  Definition ctx := MD.ctx.
-  Definition ctxloc := MD.ctxloc. *)
 
   (** Initial local context *)
   Definition ctxl_init : mdlcontext := mstempty.
@@ -1065,15 +953,6 @@ Definition modelsec_welldefined
            (cst : cptcontext) (mdls : modelsec) : Prop :=
   let pmdls := map modeldef_pair_with_id mdls in
   MMdlDef_SinglePassMDefs.module_ok cst pmdls.
-
-(*
-Definition modeldef_to_mty (M : modeldef) : mty :=
-  match M with 
-    mdl_def Mname C Mbody => 
-    let nmtms := map namedef_to_pair Mbody in
-    MTdef C (IdLPM.map_from_list nmtms) 
-  end.
-*)
 
 Definition namedef_list_to_mty (C : id) (defs : namedef_list) : mty :=
   let nmtms := map namedef_to_pair defs in
