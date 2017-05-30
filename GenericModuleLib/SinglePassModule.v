@@ -92,6 +92,9 @@ Module SinglePassModuleDefs (Import MMB : SinglePassModuleBase)
   Definition module_ok (c : ctx) (decls : list (id * dt)) : Prop :=
     MGM.module_ok dt ctx members_ok c decls.
 
+  Ltac unfold_def G :=
+    unfold module_ok, MGM.module_ok in G.
+
 End SinglePassModuleDefs.
 
 (* ################################################################# *)

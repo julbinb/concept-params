@@ -503,6 +503,67 @@ Section HelperProgress.
 
 End HelperProgress.
 
+(*
+Lemma abc' :
+  forall CTbl MTbl M C,
+    model_welldefined CTbl MTbl M ->
+    forall (nm : id),
+      IdLPM.IdMap.find nm CTbl = Some
+
+Lemma abc :
+  forall CTbl MTbl,
+    cptcontext_welldefined CTbl ->
+    mdlcontext_welldefined CTbl MTbl ->
+    forall (nm : id),
+      IdLPM.IdMap.find nm CTbl = Some
+*)
+
+
+Axiom mdlcontext_WD__name_definition_exists :
+  forall CTbl MTbl,
+    cptcontext_welldefined CTbl ->
+    mdlcontext_welldefined CTbl MTbl ->
+    forall M C nmtms nmtys nm T,
+      IdLPM.IdMap.find M MTbl = Some (MTdef C nmtms) ->
+      IdLPM.IdMap.find C CTbl = Some (CTdef nmtys) ->
+      find_ty nm nmtys = Some T ->
+      exists t,
+        find_tm nm nmtms = Some t.
+
+(*Close Scope stlca_scope.*)
+
+(*
+Definition test CTbl MTbl t T :=
+  CTbl $ MTbl ; ctxempty |- t \in T.
+*)
+
+Ltac make_substep :=
+  match goal with
+  | [Ht : exists t', ?CTbl $ ?MTbl ; ?t #==> t' 
+     |- (*exists s, ?CTbl $ ?MTbl ; context[?t] #==> s*) context[ ?t ] ] 
+    => inversion Ht as [subt' Hsubt']; 
+       eexists; constructor; eassumption                                     
+  end.
+
+Ltac progress_bin_op_nat :=
+  match goal with
+  | [ IHHT1 : context[ value ?t1 
+                       \/ (exists t1' : tm, ?CTbl $ ?Mtbl; ?t1 #==> t1') ] ,
+      IHHT2 : context[ value ?t2 
+                       \/ (exists t2' : tm, ?CTbl $ ?Mtbl; ?t2 #==> t2') ] ,
+      HT1 : ?CTbl $ ?MTbl ; ctxempty |- ?t1 \in TNat ,
+      HT2 : ?CTbl $ ?MTbl ; ctxempty |- ?t2 \in TNat 
+      |- _ ] 
+    => right;
+       destruct IHHT1 as [Ht1 | Ht1]; try tauto;
+         [ destruct IHHT2 as [Ht2 | Ht2]; try tauto;
+           pose proof (canonical_forms_nat _ _ t1 HT1 Ht1) as Hv1;
+           inversion Hv1 as [n1 Hn1]; subst t1;
+           try (pose proof (canonical_forms_nat _ _ t2 HT2 Ht2) as Hv2;
+                inversion Hv2 as [n2 Hn2]; subst t2; eexists; constructor);
+           try make_substep
+         | make_substep ]
+  end.
 
 Theorem progress : forall CTbl MTbl t T,
      CTbl $ MTbl ; ctxempty ||- t \in T ->
@@ -515,7 +576,10 @@ Proof.
   remember ctxempty as Gamma.
   unfold has_type_WD in HT.
   destruct HT as [HCTOk [HMTOk HT]].
-  induction HT; subst Gamma; eauto.
+  induction HT; subst Gamma; eauto;
+    
+    (* for binary nat ops *)
+    try solve [progress_bin_op_nat].
 (* tvar *)
   - (* var cannot be typed in empty context*) 
     inversion H.
@@ -560,9 +624,89 @@ Proof.
   - (* method invocation makes a step to its body *)
     right.
     (* For this we actually need model table correctness *)
+    pose proof 
+         (mdlcontext_WD__name_definition_exists CTable MTable
+            HCTOk HMTOk M C Mbody) as Hspec.   
+    unfold concept_fun_member in *.
+    destruct (IdLPM.IdMap.find C CTable) as [[nmtys] |] eqn:Heq.
+    + specialize (Hspec nmtys f TF H0).
+      assert (Htriv : Some (CTdef nmtys) = Some (CTdef nmtys)) by reflexivity.
+      specialize (Hspec Htriv H1).
+      clear Htriv. 
+      inversion Hspec as [t' Ht'].
+      exists t'.
+      apply ST_CInvk with (C := C) (Mbody := Mbody).
+      assumption. assumption.
+    + contradiction.
+(* tif t1 t2 t3 *)
+  - (* if always makes a step *)
+    right.
+    destruct IHHT1 as [Ht1 | Ht1]; try tauto.
+    + (* t1 is a bool value *)
+      pose proof (canonical_forms_bool _ _ t1 HT1 Ht1).
+      destruct H as [Htrue | Hfalse]; subst t1;
+        econstructor; constructor.
+    + (* t1 can make a step *)
+      make_substep.      
+(* tsucc t1 *)
+  - (* tsucc can always make a step *)
+    right.
+    destruct IHHT as [Ht1 | Ht1]; try tauto.
+    + (* t1 is a nat value *)
+      pose proof (canonical_forms_nat _ _ t1 HT Ht1).
+      destruct H as [n Hn]. subst t1.
+      eexists. apply ST_SuccNV.
+    + make_substep.
+(* tpred t1 *)
+  - (* tpred can always make a step *)
+    right.
+    destruct IHHT as [Ht1 | Ht1]; try tauto.
+    + (* t1 is a nat value *)
+      pose proof (canonical_forms_nat _ _ t1 HT Ht1).
+      destruct H as [n Hn]. subst t1.
+      destruct n as [| n']. 
+      eexists. apply ST_PredZero.
+      eexists. apply ST_PredSucc.
+    + make_substep.
+(* teqnat *)
+  - (* teqnat always makes a step *)
+    right.
+    destruct IHHT1 as [Ht1 | Ht1]; try tauto.
+    + destruct IHHT2 as [Ht2 | Ht2]; try tauto;
+        pose proof (canonical_forms_nat _ _ t1 HT1 Ht1) as Hv1;
+        inversion Hv1 as [n1 Hn1]; subst t1.
+      pose proof (canonical_forms_nat _ _ t2 HT2 Ht2) as Hv2.
+      inversion Hv2 as [n2 Hn2]. subst t2.
+      destruct (Nat.eq_dec n1 n2).
+      * exists ttrue. apply ST_EqnatNVTrue; tauto.
+      * exists tfalse. apply ST_EqnatNVFalse; tauto.
+      * make_substep. 
+    + make_substep.
+(* tlenat *)
+  - (* tlenat always makes a step *)
+    right.
+    destruct IHHT1 as [Ht1 | Ht1]; try tauto.
+    + destruct IHHT2 as [Ht2 | Ht2]; try tauto;
+        pose proof (canonical_forms_nat _ _ t1 HT1 Ht1) as Hv1;
+        inversion Hv1 as [n1 Hn1]; subst t1.
+      pose proof (canonical_forms_nat _ _ t2 HT2 Ht2) as Hv2.
+      inversion Hv2 as [n2 Hn2]. subst t2.
+      destruct (lt_dec n1 n2).
+      * exists ttrue. apply ST_LenatNVTrue; tauto.
+      * exists tfalse. apply ST_LenatNVFalse. apply not_lt; assumption.
+      * make_substep. 
+    + make_substep.
+Qed.
+
+(*
+(* CInvk *)
+
     unfold mdlcontext_welldefined in HMTOk.
     destruct HMTOk as [mdls [HmdlsOk HmdlsMty]].
     unfold modelsec_welldefined in HmdlsOk.
+    
+(*    MMdlDef_SinglePassMDefs.unfold_def HmdlsOk. *)
+
     unfold MMdlDef_SinglePassMDefs.module_ok in HmdlsOk.
     unfold MMdlDef_SinglePassMDefs.HelperD.MGM.module_ok in HmdlsOk.
     destruct HmdlsOk as [Hdup Hmems].
@@ -570,7 +714,247 @@ Proof.
     unfold MMdlDef_SinglePassMDefs.HelperD.MSP.members_ok in Hmems.
     unfold MMdlDef_SinglePassMDefs.HelperD.MSP.members_ok' in Hmems.
     remember (IdLPM.IdMap.find f Mbody) as ftm'.
+    unfold MMdlDef_SinglePassMDefs.HelperD.MSP.process_dep_member in Hmems.
+    unfold MMdlDef_SinglePassMDefs.HelperD.update_prop in Hmems.
+    unfold MMdlDef_DataLCOkDef.is_ok in Hmems.
+    unfold model_welldefined in Hmems.
+    unfold MMdlMem_SinglePassImplMDefs.module_ok in Hmems.
+    unfold MMdlMem_SinglePassImplMDefs.module_ok in Hmems.
+    unfold MMdlMem_SinglePassImplMDefs.HelperD.MGM.module_ok in Hmems.
+    unfold MMdlMem_SinglePassImplMDefs.HelperD.members_ok in Hmems.
+    unfold MMdlMem_SinglePassImplMDefs.HelperD.MSP.members_ok in Hmems.
+    unfold MMdlMem_SinglePassImplMDefs.HelperD.MSP.members_ok' in Hmems.
+    unfold MMdlMem_SinglePassImplMDefs.HelperD.MSP.process_dep_member in Hmems.
+    unfold MMdlMem_SinglePassImplMDefs.HelperD.update_prop in Hmems.
+    unfold MMdlMem_DataLCIOkDef.is_ok in Hmems.
+    unfold model_member_valid in Hmems.
+*)
+
+Definition appears_free_in (CTbl : cptcontext) (MTbl : mdlcontext)
+           (x : id) (t : tm) : Prop :=
+  IdLS.IdSet.In x (free_vars CTbl MTbl t).
+
+Hint Unfold appears_free_in.
+
+Lemma free_in_context : forall CTbl MTbl x t T Gamma,
+   appears_free_in CTbl MTbl x t ->
+   CTbl $ MTbl ; Gamma |- t \in T ->
+   (exists T', Gamma x = Some (tmtype T'))
+   \/ (exists C, Gamma x = Some (cpttype C)).
+Proof.
+  intros CTbl MTbl x t.
+  induction t;
+    intros T Gamma Hfree HT; 
+    unfold appears_free_in in *; simpl in *;
+    inversion HT; simpl in *; subst;
+    (* we can do some automation... *)
+    try 
+    solve [
+    (* in simple cases such as [ttrue] we have a contradiction
+       in the assumption: there are no FV in the term *)
+      match goal with
+      |[ H : IdLS.IdSet.In x IdLS.IdSet.empty |- _ ]
+       => rewrite IdLS.Props.IdSetProps.Dec.F.empty_iff in H; 
+          contradiction
+      end
+    (* in recursive cases such as [tif] pt [tsucc]
+       we can simply solve it by IH *)
+    | repeat (apply IdLS.Props.IdSetProps.FM.union_1 in Hfree;
+            destruct Hfree as [Hfree | Hfree]);
+          match goal with
+          | [IHt : forall (T : ty) (Gamma : context),
+                   IdLS.IdSet.In ?x (free_vars ?CTbl ?MTbl ?t1) ->
+                   ?CTbl $ ?MTbl; Gamma |- ?t1 \in T -> _,
+               Hfree : IdLS.IdSet.In ?x (free_vars ?CTbl ?MTbl ?t1),
+               HTt : ?CTbl $ ?MTbl; ?Gamma |- ?t1 \in ?T |- _]
+            => specialize (IHt _ Gamma Hfree HTt); assumption
+          end ].
+  - (* tvar i *)
+    apply IdLS.Props.IdSetProps.FM.singleton_1 in Hfree.
+    unfold IdUOT.eq in Hfree. subst.
+    left. exists T. assumption.
+  - (* tabs *)
+    rename i into y. rename t into T11.
+    rewrite IdLS.Props.IdSetProps.Dec.F.remove_iff in Hfree.
+    destruct Hfree as [Hfree Heqxy]. unfold IdUOT.eq in *.
+    specialize (IHt _ _ Hfree H6).
+    destruct IHt as [IHt | IHt];
+      destruct IHt as [V HV]; 
+      [ left | right ]; exists V;
+      pose proof (update_neq _ (tmtype T11) x y Gamma Heqxy) as HG;
+      rewrite <- HG; assumption.
+  - (* tcabs *)
+    rename i into c. rename i0 into C.
+    rewrite IdLS.Props.IdSetProps.Dec.F.remove_iff in Hfree.
+    destruct Hfree as [Hfree Heqxy]. unfold IdUOT.eq in *.
+    specialize (IHt _ _ Hfree H7).
+    destruct IHt as [IHt | IHt];
+      destruct IHt as [V HV];
+      [ left | right ]; exists V;
+      pose proof (update_neq _ (cpttype C) x c Gamma Heqxy) as HG;
+      rewrite <- HG; assumption.
+  - (* tcinvk *)
+    rename i into c. rename i0 into f.
+    destruct (IdLPM.IdMap.find c MTbl).
+    + rewrite IdLS.Props.IdSetProps.Dec.F.empty_iff in Hfree.
+      contradiction.
+    + apply IdLS.Props.IdSetProps.FM.singleton_1 in Hfree.
+      unfold IdUOT.eq in Hfree. subst.
+      right. exists C. assumption.
+  - (* tcinvk *)
+    rename i into M. rename i0 into f.
+    destruct (IdLPM.IdMap.find M MTbl).
+    + rewrite IdLS.Props.IdSetProps.Dec.F.empty_iff in Hfree.
+      contradiction.
+    + apply IdLS.Props.IdSetProps.FM.singleton_1 in Hfree.
+      unfold IdUOT.eq in Hfree. subst.
+      inversion H5.
+  - (* tlet *)
+    rename i into y.
+    apply IdLS.Props.IdSetProps.FM.union_1 in Hfree.
+    destruct Hfree as [Hfree | Hfree].
+    + specialize (IHt1 _ Gamma Hfree H6); assumption.
+    + rewrite IdLS.Props.IdSetProps.Dec.F.remove_iff in Hfree.
+      destruct Hfree as [Hfree Heqxy]. unfold IdUOT.eq in *.
+      specialize (IHt2 _ _ Hfree H7). 
+      destruct IHt2 as [IHt2 | IHt2];
+      destruct IHt2 as [V HV];
+      [ left | right ]; exists V;
+      pose proof (update_neq _ (tmtype T1) x y Gamma Heqxy) as HG;
+      rewrite <- HG; assumption.
+Qed.
+
+Lemma context_invariance : forall CTbl MTbl Gamma Gamma' t T,
+    cptcontext_welldefined CTbl ->
+    mdlcontext_welldefined CTbl MTbl ->
+    CTbl $ MTbl ; Gamma |- t \in T  ->
+    (forall x, appears_free_in CTbl MTbl x t -> Gamma x = Gamma' x) ->
+    CTbl $ MTbl ; Gamma' |- t \in T.
+Proof.
+  intros CTbl MTbl Gamma Gamma' t T HCTOk HMTOk HT.
+  generalize dependent Gamma'.
+  induction HT; intros Gamma' Hfree; 
+    unfold appears_free_in in *; simpl; auto;
+    repeat match goal with
+             [HCTOk : cptcontext_welldefined ?CTable ,
+              HMTOk : mdlcontext_welldefined ?CTable ?MTable ,      
+              IHHT : cptcontext_welldefined ?CTable ->
+              mdlcontext_welldefined ?CTable ?MTable ->
+              forall Gamma' : id -> option ctxvarty, _ |- _ ]
+             => specialize (IHHT HCTOk HMTOk)
+    end;
+    simpl in *.
+(*    unfold free_vars in Hfree; simpl in Hfree. *)
+  - (* tvar *)
+    specialize (Hfree x). unfold free_vars in Hfree.
+    assert (Hin : IdLS.IdSet.In x (IdLS.IdSet.singleton x)).
+    apply IdLS.Props.IdSetProps.Dec.F.singleton_2. reflexivity.
+    apply Hfree in Hin. rewrite H in Hin.
+    constructor. symmetry. assumption.
+  - (* tapp t1 t2 *)
+    apply T_App with T11.
+    + apply IHHT1.
+      intros x H. apply Hfree. 
+      apply IdLS.Props.IdSetProps.FM.union_2; assumption.
+    + apply IHHT2.
+      intros x H. apply Hfree.
+      apply IdLS.Props.IdSetProps.FM.union_3; assumption.
+  - (* tabs *)
+    apply T_Abs.
+    apply IHHT.
+    intros y Hin.
+    destruct (beq_idP x y).
+    + subst. rewrite update_eq. rewrite update_eq.
+      reflexivity.
+    + assert (Hin' : IdLS.IdSet.In y 
+                     (IdLS.IdSet.remove x (free_vars CTable MTable t12))).
+      { apply IdLS.Props.IdSetProps.Dec.F.remove_2;
+          assumption. }
+      specialize (Hfree y Hin').
+      rewrite (update_neq _ _ _ _ _ n). rewrite (update_neq _ _ _ _ _ n).
+      assumption.
+  - (* tmapp *)
+    econstructor. eassumption.
+    apply IHHT. assumption.
+  - (* tcabs *)
+    apply T_CAbs with Cbody. assumption.
+    apply IHHT.
+    intros y Hin.
+    destruct (beq_idP y c).
+    + subst. rewrite update_eq. rewrite update_eq.
+      reflexivity.
+    + assert (Hin' : IdLS.IdSet.In y 
+                     (IdLS.IdSet.remove c (free_vars CTable MTable t1))).
+      { apply IdLS.Props.IdSetProps.Dec.F.remove_2. 
+        intros Heq. symmetry in Heq. apply n in Heq. 
+        assumption. assumption. }
+      specialize (Hfree y Hin'). apply not_eq_sym in n.
+      rewrite (update_neq _ _ _ _ _ n). rewrite (update_neq _ _ _ _ _ n).
+      assumption.
+  - (* tcinvk *)
+    apply T_CInvk with C.
+    rewrite <- H.
+    symmetry. apply Hfree.
+    
+
 
 Abort.
 
 
+Lemma substitution_preserves_typing : 
+  forall CTbl MTbl Gamma x S t v T,
+    cptcontext_welldefined CTbl ->
+    mdlcontext_welldefined CTbl MTbl ->
+    CTbl $ MTbl ; (update Gamma x (tmtype S)) |- t \in T ->
+    CTbl $ MTbl ; ctxempty |- v \in S -> 
+    CTbl $ MTbl ; Gamma |- [x:=v] t \in T.
+Proof.
+  intros CTbl MTbl Gamma x S t v T HCTOk HMTOk.
+  intros Ht Hv.
+  generalize dependent T. generalize dependent Gamma.
+  induction t;
+    intros Gamma T Ht;
+    inversion Ht; subst; simpl. 
+(* tvar *)
+  - rename i into y. destruct (beq_idP x y). 
+    + subst. 
+      rewrite update_eq in H3. inversion H3. subst. clear H3.
+      
+      
+    
+  
+
+Abort.
+
+
+
+Theorem preservation : forall CTbl MTbl t t' T,
+    (* source term has a type *)
+    CTbl $ MTbl ; ctxempty ||- t \in T ->
+    (* term makes a step *)
+    CTbl $ MTbl ; t #==> t' ->
+    (* then a new term has the same type *)
+    CTbl $ MTbl ; ctxempty ||- t' \in T.
+Proof.
+  remember ctxempty as Gamma.
+  intros CTbl MTbl t t' T HT. generalize dependent t'.
+  destruct HT as [HCTOk [HMTOk HT]].
+  induction HT;
+    intros t' HE; subst Gamma;
+    try solve [inversion HE; subst; auto];
+  repeat match goal with
+  |[ HCTOk : cptcontext_welldefined ?CTbl ,
+     HMTOk : mdlcontext_welldefined ?CTbl ?MTbl,
+     H : ctxempty = ctxempty ->
+         cptcontext_welldefined ?CTbl ->
+         mdlcontext_welldefined ?CTbl ?MTbl -> _
+     |- _ ] 
+    => assert (Htriv : ctxempty = ctxempty) by reflexivity; 
+         specialize (H Htriv HCTOk HMTOk); clear Htriv
+  end.
+(* tapp t1 t2 *)
+  - inversion HE; subst.
+    inversion HT1; subst.
+     
+Abort.
+     

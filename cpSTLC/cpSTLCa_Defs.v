@@ -1082,52 +1082,66 @@ Hint Constructors value.
 
     All other forms of term needs recursive search of free vars. *)
 
-Fixpoint free_vars (t : tm) : IdLS.id_set := 
+Fixpoint free_vars (CTbl : cptcontext) (MTbl : mdlcontext)
+         (t : tm) : IdLS.id_set := 
   match t with
   (* FV(x) = {x} *)
   | tvar x      => IdLS.IdSet.singleton x  
   (* FV(t1 t2) = FV(t1) \union FV(t2) *)
-  | tapp t1 t2  => IdLS.IdSet.union (free_vars t1) (free_vars t2)
+  | tapp t1 t2  => IdLS.IdSet.union (free_vars CTbl MTbl t1) 
+                                    (free_vars CTbl MTbl t2)
   (* FV(\x:T.t) = FV(t) \ {x} *)                               
-  | tabs x T t  => let t_fv := free_vars t in
+  | tabs x T t  => let t_fv := free_vars CTbl MTbl t in
       IdLS.IdSet.remove x t_fv
-(*
   (* FV(t # M) = FV(t) because M refers to MTable, not term itself *)   
-  | tmapp t M   => free_vars t   
-*)
+  | tmapp t M   => free_vars CTbl MTbl t   
+
+(*
   (* FV(t # M) = FV(t) \union {M} *)   
   | tmapp t M   => IdLS.IdSet.union (free_vars t) (IdLS.IdSet.singleton M)   
+*)
+
   (* FV(\c#C.t) = FV(t) because C is not subject for substitution *)
-  | tcabs c C t => let t_fv := free_vars t in
+  | tcabs c C t => let t_fv := free_vars CTbl MTbl t in
       IdLS.IdSet.remove c t_fv
   (* FV(c.f) = {c} *)
-  | tcinvk c f  => IdLS.IdSet.singleton c
+  | tcinvk c f  => match IdLPM.IdMap.find c MTbl with 
+                   | None => IdLS.IdSet.singleton c
+                   | _    => IdLS.IdSet.empty (* this is M.f where M \in MTbl *)
+                   end
   (* FV(true) = {} *)
   | ttrue       => IdLS.IdSet.empty
   (* FV(false) = {} *)
   | tfalse      => IdLS.IdSet.empty
   (* FV(if t1 then t2 else t3) = FV(t1) \union FV(t2) \union FV(t3) *)
-  | tif t1 t2 t3 => IdLS.IdSet.union (IdLS.IdSet.union 
-      (free_vars t1) (free_vars t2)) (free_vars t3)
+  | tif t1 t2 t3 => IdLS.IdSet.union 
+                      (IdLS.IdSet.union 
+                         (free_vars CTbl MTbl t1) (free_vars CTbl MTbl t2)) 
+                      (free_vars CTbl MTbl t3)
   (* FV(n) = {} *)
   | tnat n      => IdLS.IdSet.empty
   (* FV(succ t) = FV(t) *)
-  | tsucc t     => free_vars t
+  | tsucc t     => free_vars CTbl MTbl t
   (* FV(pred t) = FV(t) *)
-  | tpred t     => free_vars t
+  | tpred t     => free_vars CTbl MTbl t
   (* FV(plus t1 t2) = FV(t1) \union FV(t2) *)
-  | tplus t1 t2  => IdLS.IdSet.union (free_vars t1) (free_vars t2)
+  | tplus t1 t2  => IdLS.IdSet.union (free_vars CTbl MTbl t1) 
+                                     (free_vars CTbl MTbl t2)
   (* FV(minus t1 t2) = FV(t1) \union FV(t2) *)
-  | tminus t1 t2 => IdLS.IdSet.union (free_vars t1) (free_vars t2)
+  | tminus t1 t2 => IdLS.IdSet.union (free_vars CTbl MTbl t1) 
+                                     (free_vars CTbl MTbl t2)
   (* FV(mult t1 t2) = FV(t1) \union FV(t2) *)
-  | tmult t1 t2  => IdLS.IdSet.union (free_vars t1) (free_vars t2)
+  | tmult t1 t2  => IdLS.IdSet.union (free_vars CTbl MTbl t1) 
+                                     (free_vars CTbl MTbl t2)
   (* FV(eqnat t1 t2) = FV(t1) \union FV(t2) *)
-  | teqnat t1 t2 => IdLS.IdSet.union (free_vars t1) (free_vars t2)
+  | teqnat t1 t2 => IdLS.IdSet.union (free_vars CTbl MTbl t1) 
+                                     (free_vars CTbl MTbl t2)
   (* FV(lenat t1 t2) = FV(t1) \union FV(t2) *)
-  | tlenat t1 t2 => IdLS.IdSet.union (free_vars t1) (free_vars t2) 
+  | tlenat t1 t2 => IdLS.IdSet.union (free_vars CTbl MTbl t1) 
+                                     (free_vars CTbl MTbl t2) 
   (* FV(let x=t1 in t2) = FV(t1) \union (FV(t2) \ {x}) *)       
-  | tlet x t1 t2 => let t2_fv := free_vars t2 in
-      IdLS.IdSet.union (free_vars t1) (IdLS.IdSet.remove x t2_fv) 
+  | tlet x t1 t2 => let t2_fv := free_vars CTbl MTbl t2 in
+      IdLS.IdSet.union (free_vars CTbl MTbl t1) (IdLS.IdSet.remove x t2_fv) 
   end.
 
 (* ----------------------------------------------------------------- *)

@@ -120,6 +120,9 @@ Module SinglePassImplModuleDefs (Import MMB : SinglePassImplModuleBase)
     MGM.module_ok MData.dt MData.ctx members_ok (c, i) decls
     /\ (HelperD.req_members_defined i decls).
 
+  Ltac unfold_def :=
+    unfold module_ok, MGM.module_ok.
+
 End SinglePassImplModuleDefs.
 
 (* ################################################################# *)

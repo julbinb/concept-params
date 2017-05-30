@@ -347,6 +347,18 @@ Section GenericDefinitions.
              (c : ctx) (cl_init : ctxloc) (dts : list data) : bool 
     := fst (members_ok'_b c cl_init dts).
 
+(*
+  Lemma abc :
+    forall P P' c cl dt, update_prop P c cl dt -> P'),
+    forall (c : ctx) (cl_init : ctxloc) (dts : list data),
+      members_ok c cl_init dts ->
+      forall (cl : ctxloc) (P P' : Prop) 
+             (HSpec : update_prop P c cl dt -> P'),
+      forall dt : data, 
+        List.In dt dts ->
+*)        
+            
+
 (* ----------------------------------------------------------------- *)
 (** **** Proofs *)
 (* ----------------------------------------------------------------- *)
