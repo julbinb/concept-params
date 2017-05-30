@@ -1101,14 +1101,16 @@ Fixpoint free_vars (CTbl : cptcontext) (MTbl : mdlcontext)
   | tmapp t M   => IdLS.IdSet.union (free_vars t) (IdLS.IdSet.singleton M)   
 *)
 
-  (* FV(\c#C.t) = FV(t) because C is not subject for substitution *)
+  (* FV(\c#C.t) = FV(t) \ {c} 
+     No C because C is not subject for substitution *)
   | tcabs c C t => let t_fv := free_vars CTbl MTbl t in
       IdLS.IdSet.remove c t_fv
   (* FV(c.f) = {c} *)
-  | tcinvk c f  => match IdLPM.IdMap.find c MTbl with 
+  | tcinvk c f  => IdLS.IdSet.singleton c
+                   (*match IdLPM.IdMap.find c MTbl with 
                    | None => IdLS.IdSet.singleton c
                    | _    => IdLS.IdSet.empty (* this is M.f where M \in MTbl *)
-                   end
+                   end*)
   (* FV(true) = {} *)
   | ttrue       => IdLS.IdSet.empty
   (* FV(false) = {} *)

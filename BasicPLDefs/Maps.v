@@ -2,7 +2,7 @@
 (* Mainly borrowed from Sofware Foundations, v.4 
    $Date: 2015-12-11 17:17:29 -0500 (Fri, 11 Dec 2015) $
 
-   Last Update: Mon, 27 Mar 2017
+   Last Update: Tue, 30 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -234,5 +234,28 @@ Theorem update_permute : forall (X:Type) v1 v2 x1 x2
 Proof.
   intros X v1 v2 x1 x2 m. unfold update.
   apply t_update_permute.
+Qed.
+
+Theorem update_permute_get : 
+  forall (X : Type) v1 v2 x1 x2 (m : partial_map X) z,
+  x2 <> x1 ->
+    (update (update m x2 v2) x1 v1) z
+  = (update (update m x1 v1) x2 v2) z.
+Proof.
+  intros X v1 v2 x1 x2 m z. 
+  intros Hneq.
+  rewrite update_permute. reflexivity. assumption.
+Qed.
+
+Theorem update_none : 
+  forall (X : Type) x v (m : partial_map X) y,
+    (update m x v) y = None ->
+    m y = None.
+Proof.
+  intros X x v m y H. 
+  destruct (beq_idP x y).
+  + subst. rewrite update_eq in H. 
+    inversion H.
+  + rewrite update_neq in H; assumption.
 Qed.
 
