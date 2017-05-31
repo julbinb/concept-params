@@ -1397,10 +1397,79 @@ Fixpoint substc (c : id) (M : id) (t : tm) : tm :=
         tlenat (substc c M t1) (substc c M t2)
 (* We assume that M <> x *)
     | tlet x t1 t2 => 
-        tlet x (substc x M t1) (if beq_id c x then t2 else (substc c M t2))
+        tlet x (substc c M t1) (if beq_id c x then t2 else (substc c M t2))
   end.
 
 Notation "'[#' c ':=' M ']' t" := (substc c M t) (at level 20) : stlca_scope.
+
+(** Looks for element in an id set. *)
+Definition id_mem := IdLS.IdSet.mem.
+
+Fixpoint qualify_model_members' (M : id) (toQual : IdLS.id_set) (t : tm) : tm :=
+  match t with
+    | tvar x => if id_mem x toQual
+                (* if [x] is a model member, we qualify it *)
+                     then tcinvk M x
+                (* otherwise do not touch *)
+                     else tvar x
+    | tapp t1 t2  =>
+        tapp (qualify_model_members' M toQual t1) 
+             (qualify_model_members' M toQual t2)
+    | tabs x T t1 => 
+        let toQual' := (if id_mem x toQual 
+                        (* no need to qualify x in t1 *)
+                        then IdLS.IdSet.remove x toQual
+                        else toQual) in
+        tabs x T (qualify_model_members' M toQual' t1)
+    | tmapp t1 N  =>
+        tmapp (qualify_model_members' M toQual t1) N
+    | tcabs c C t1 =>
+        let toQual' := (if id_mem c toQual 
+                        (* no need to qualify c in t1 *)
+                        then IdLS.IdSet.remove c toQual
+                        else toQual) in
+        tcabs c C (qualify_model_members' M toQual' t1)
+    | tcinvk c f =>
+        tcinvk c f
+    | ttrue  => ttrue
+    | tfalse => tfalse
+    | tif t1 t2 t3 =>
+        tif (qualify_model_members' M toQual t1) 
+            (qualify_model_members' M toQual t2) 
+            (qualify_model_members' M toQual t3)
+   | tnat n =>
+        tnat n
+    | tsucc t1 =>
+        tsucc (qualify_model_members' M toQual t1)
+    | tpred t1 =>
+        tpred (qualify_model_members' M toQual t1)
+    | tplus t1 t2  =>
+        tplus (qualify_model_members' M toQual t1) 
+              (qualify_model_members' M toQual t2)
+    | tminus t1 t2 =>
+        tminus (qualify_model_members' M toQual t1) 
+               (qualify_model_members' M toQual t2)
+    | tmult t1 t2  =>
+        tmult (qualify_model_members' M toQual t1) 
+              (qualify_model_members' M toQual t2)
+    | teqnat t1 t2 =>
+        teqnat (qualify_model_members' M toQual t1) 
+               (qualify_model_members' M toQual t2)
+    | tlenat t1 t2 =>
+        tlenat (qualify_model_members' M toQual t1) 
+               (qualify_model_members' M toQual t2)
+    | tlet x t1 t2 => 
+        let toQual' := (if id_mem x toQual 
+                        (* no need to qualify x in t1 *)
+                        then IdLS.IdSet.remove x toQual
+                        else toQual) in
+        tlet x (qualify_model_members' M toQual t1) 
+               (qualify_model_members' M toQual' t2)
+  end.
+
+Definition qualify_model_members (M : id) (Mbody : id_tm_map) (t : tm) : tm :=
+  let toQual := IdLS.set_from_list (map fst (IdLPM.IdMap.elements Mbody)) in
+  qualify_model_members' M toQual t.
 
 (* ================================================================= *)
 (** *** Reduction (Small-step operational semantics) *)
@@ -1473,8 +1542,11 @@ Notation "'[#' c ':=' M ']' t" := (substc c M t) (at level 20) : stlca_scope.
                            M \in dom(MTbl)
                         f \in names(MTbl(M))
                           MTble(M)(f) = tf
-                     ---------------------------                     (ST_CInvk)
-                      CTbl * MTbl ; M.f ==> tf
+                     -------------------------------                 (ST_CInvk)
+                      CTbl * MTbl ; M.f ==> QMM(tf)
+      
+      where QMM is a function, which takes a term and
+      replaces all model members into their qualified names.
 
     ttrue
       no rules
@@ -1636,7 +1708,7 @@ Inductive step (CTbl : cptcontext) (MTbl : mdlcontext) : tm -> tm -> Prop :=
   | ST_CInvk : forall M f C Mbody tf,
          IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
          find_tm f Mbody = Some tf -> 
-         CTbl $ MTbl ; (tcinvk M f) #==> tf
+         CTbl $ MTbl ; (tcinvk M f) #==> (qualify_model_members M Mbody tf)
 (* if *)
   | ST_IfTrue : forall t2 t3,
          CTbl $ MTbl ; (tif ttrue t2 t3) #==> t2
