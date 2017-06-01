@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 29 May 2017
+   Last Update: Wed, 31 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -52,9 +52,16 @@ Require Import Coq.FSets.FMapInterface.
 Module IdLS' := MList2MSetAVL IdUOT.
 Module IdLS  := IdLS'.M.
 
+Definition id_set := IdLS.id_set.
+
 (** [ListPair2FMap] module for [id] type of identifiers. *)
 Module IdLPM' := MListPair2FMapAVL IdUOTOrig.
 Module IdLPM  := IdLPM'.M. 
+
+Definition id_map := IdLPM.id_map.
+
+Definition set_of_keys {X : Type} (m : id_map X) : id_set :=
+  IdLS.set_from_list (map fst (IdLPM.IdMap.elements m)).
 
 (** Identifier Data Module *)
 Module MId <: IdentifiersBase.
@@ -790,22 +797,91 @@ Definition model_defined (st : mdlcontext) (nm : id) : Prop :=
 
 (** [model_member_valid] is a proposition stating that the given
     model member [nd] (name definition, [f := t]) is valid against
-    a concept with members [cpt] (name declarations, [f : T])
-    and previously defined members.
+    the concept [cpt] (name declarations, [f : T])
+    and previously defined members of the model.
 *)
 
-Definition model_member_valid (cst : cptcontext) (mst : mdlcontext)
-                              (cpt : id_ty_map) (prevmems : id_ty_map)
-                              (nm : id) (t : tm) : Prop :=
-  let local_ctx := IdLPM.IdMap.fold 
-                     (fun nm tp ctx => update ctx nm (tmtype tp))
-                     prevmems ctxempty in
+(** UPD
+
+    As we found out when trying to prove soundness,
+    bound variables in terms should not have names
+    that interfere with model names.
+    As we check model members before we "know" all the models,
+    there is not enough information about models names 
+    in the context yet. 
+
+    So we have to:
+    * provide information on all forbidden (model) names;
+    * check that bound variables do not use these names.
+ *)
+
+(** Returns set of names of all bound variables used in the term. *)
+Fixpoint bound_vars (t : tm) : id_set := 
+  match t with
+  (* BV(x) = {} *)
+  | tvar x      => IdLS.IdSet.empty  
+  (* BV(t1 t2)  = BV(t1) \union BV(t2) *)
+  | tapp t1 t2  => IdLS.IdSet.union (bound_vars t1) (bound_vars t2)
+  (* BV(\x:T.t) = BV(t) \union {x} *)                               
+  | tabs x T t  => IdLS.IdSet.union (IdLS.IdSet.singleton x) (bound_vars t)
+  (* BV(t # M)  = BV(t) *)   
+  | tmapp t M   => bound_vars t   
+  (* BV(\c#C.t) = BV(t) \union {c} *)
+  | tcabs c C t => IdLS.IdSet.union (IdLS.IdSet.singleton c) (bound_vars t)
+  (* BV(c.f) = {} *)
+  | tcinvk c f  => IdLS.IdSet.empty
+  (* BV(true) = {} *)
+  | ttrue       => IdLS.IdSet.empty
+  (* BV(false) = {} *)
+  | tfalse      => IdLS.IdSet.empty
+  (* BV(if t1 then t2 else t3) = BV(t1) \union BV(t2) \union BV(t3) *)
+  | tif t1 t2 t3 => IdLS.IdSet.union 
+                      (IdLS.IdSet.union (bound_vars t1) (bound_vars t2)) 
+                      (bound_vars t3)
+  (* BV(n) = {} *)
+  | tnat n      => IdLS.IdSet.empty
+  (* BV(succ t) = BV(t) *)
+  | tsucc t     => bound_vars t
+  (* BV(pred t) = BV(t) *)
+  | tpred t     => bound_vars t
+  (* BV(plus t1 t2) = BV(t1) \union BV(t2) *)
+  | tplus t1 t2  => IdLS.IdSet.union (bound_vars t1) (bound_vars t2)
+  (* BV(minus t1 t2) = BV(t1) \union BV(t2) *)
+  | tminus t1 t2 => IdLS.IdSet.union (bound_vars t1) (bound_vars t2)
+  (* BV(mult t1 t2) = BV(t1) \union BV(t2) *)
+  | tmult t1 t2  => IdLS.IdSet.union (bound_vars t1) (bound_vars t2)
+  (* BV(eqnat t1 t2) = BV(t1) \union BV(t2) *)
+  | teqnat t1 t2 => IdLS.IdSet.union (bound_vars t1) (bound_vars t2)
+  (* BV(lenat t1 t2) = BV(t1) \union BV(t2) *)
+  | tlenat t1 t2 => IdLS.IdSet.union (bound_vars t1) (bound_vars t2)
+  (* BV(let x=t1 in t2) = BV(t1) \union BV(t2) \union {x} *)       
+  | tlet x t1 t2 => IdLS.IdSet.union
+                      (IdLS.IdSet.singleton x)
+                      (IdLS.IdSet.union (bound_vars t1) (bound_vars t2))
+  end.
+
+(** There are no bound variables in [t] with names from [badnames]. *)
+
+Definition no_bound_var_names_in_term 
+           (badnames : id_set) (t : tm) : Prop :=
+  forall (x : id), 
+    IdLS.IdSet.In x badnames ->
+    ~ IdLS.IdSet.In x (bound_vars t).
+
+Definition model_member_valid (CTbl : cptcontext) (MTbl : mdlcontext)
+           (mdlnames : id_set) (cpt : id_ty_map) (prevmems : id_ty_map)
+           (nm : id) (t : tm) : Prop :=
+  let Gamma := IdLPM.IdMap.fold 
+                 (fun nm tp G => update G nm (tmtype tp))
+                 prevmems ctxempty in
   exists (T : ty),
     (** there is [nm : T] in a concept *)
     find_ty nm cpt = Some T
+    (** no model names from [mdlnames] are used for names of bound vars *)
+    /\ no_bound_var_names_in_term mdlnames t
     (** and [T] is a type of [t], that is 
-        [cst * mst ; local_ctx |- t : T] *)
-    /\ has_type cst mst local_ctx t T.
+        [CTbl $ MTbl ; Gamma |- t : T] *)
+    /\ has_type CTbl MTbl Gamma t T.
 
 (* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *)
 (** This part is using GenericModulesLib  *)
@@ -816,24 +892,31 @@ Definition model_member_valid (cst : cptcontext) (mst : mdlcontext)
 Module MMdlMem_DataLCI <: DataLCI.  
   (** Type of Data -- term *)
   Definition t := tm.
+
   (** Type of Context needed for checking WD of terms.
-      We need both concept and model table. *)
-  Definition ctx := (cptcontext * mdlcontext) % type. 
+      We need both concept and model table, 
+      and also forbidden model names. *)
+  Definition ctx := (cptcontext * mdlcontext * id_set) % type. 
+
   (** Type of Local Context which is needed for checking WD of terms
       (here we need types of previously defined members). *)
   Definition ctxloc := id_ty_map.
+
   (** Type of Concept representation in symbol table *)
   Definition intrfs := id_ty_map.
 End MMdlMem_DataLCI.
 
 Module MMdlMem_DataLCIOkDef <: DataLCIOkDef MId MMdlMem_DataLCI. 
+
   (* Element [t] must be ok with respect 
      to global [ctx] and local [ctxloc] contexts. *) 
-  Definition is_ok (cm : cptcontext * mdlcontext) 
+  Definition is_ok (cm_nms : cptcontext * mdlcontext * id_set) 
              (cpt : id_ty_map) (prevmems : id_ty_map) 
-             (nm : id) (t : tm) : Prop
-    := let (c, m) := cm in
-       model_member_valid c m cpt prevmems nm t.
+             (nm : id) (t : tm) : Prop := 
+    let (cm, mdlnms) := cm_nms in
+    let (c, m) := cm in
+    model_member_valid c m mdlnms cpt prevmems nm t.
+
 End MMdlMem_DataLCIOkDef.
 
 Module MMdlMem_SinglePassImplMBase <: SinglePassImplModuleBase.
@@ -841,15 +924,17 @@ Module MMdlMem_SinglePassImplMBase <: SinglePassImplModuleBase.
 
   Module MD := MMdlMem_DataLCI.
 
-  (** Initial local context *)
+  (** Initial local context (Gamma) *)
   Definition ctxl_init := IdLPM.IdMap.empty ty.
+
   (** Update local context *)
-  Definition upd_ctxloc (prevmems : id_ty_map) (cm : cptcontext * mdlcontext) 
-             (cpt : id_ty_map) (nm : id) (t : tm) : id_ty_map 
-    := match find_ty nm cpt with
-       | Some tp => IdLPM.IdMap.add nm tp prevmems
-       | None => prevmems
-       end.
+  Definition upd_ctxloc (prevmems : id_ty_map) 
+             (cm_nms : cptcontext * mdlcontext * id_set) 
+             (cpt : id_ty_map) (nm : id) (t : tm) : id_ty_map :=
+    match find_ty nm cpt with
+    | Some tp => IdLPM.IdMap.add nm tp prevmems
+    | None => prevmems
+    end.
 
   (** Members which have to be defined by an interface *)
   Definition members_to_define (cpt : id_ty_map) : list id 
@@ -863,27 +948,27 @@ Module MMdlMem_SinglePassImplMDefs :=
 (** Now we are ready to formally define what it means for a model
     to be well-defined. *)
 
-Definition model_welldefined 
-           (cst : cptcontext) (mst : mdlcontext) (M : modeldef) : Prop 
-  := match M with 
-       mdl_def mname C mbody =>
-       let decls := map namedef_to_pair mbody in
-       (** concept [C] is defined in symbol table, 
-           and model is ok with respect to this concept *)
-       exists (fnmtys : id_ty_map), 
-         IdLPM.IdMap.find C cst = Some (CTdef fnmtys)
-         /\ MMdlMem_SinglePassImplMDefs.module_ok (cst, mst) fnmtys decls
-     end.
+Definition model_welldefined (CTbl : cptcontext) (MTbl : mdlcontext) 
+           (mdlnames : id_set) (M : modeldef) : Prop :=
+  match M with 
+    mdl_def Mname C Mbody =>
+    let decls := map namedef_to_pair Mbody in
+    (** concept [C] is defined in symbol table, 
+        and model is ok with respect to this concept *)
+    exists (fnmtys : id_ty_map), 
+      IdLPM.IdMap.find C CTbl = Some (CTdef fnmtys)
+      /\ MMdlMem_SinglePassImplMDefs.module_ok (CTbl, MTbl, mdlnames) fnmtys decls
+  end.
 
 (** And we also need typing relation for models. *)
 
-Definition model_has_type (cst : cptcontext) (mst : mdlcontext) 
-           (M : modeldef) (MT : mty) : Prop :=
+Definition model_has_type (CTbl : cptcontext) (MTbl : mdlcontext) 
+           (mdlnames : id_set) (M : modeldef) (MT : mty) : Prop :=
   (** model def must be well-defined *)
-  model_welldefined cst mst M
+  model_welldefined CTbl MTbl mdlnames M
   /\ match MT with MTdef _ mnmtms =>
-     match M with mdl_def _ _ mbody =>
-     let pnds := map namedef_to_pair mbody in
+     match M with mdl_def _ _ Mbody =>
+     let pnds := map namedef_to_pair Mbody in
   (** and the map [mnmtms] has to be equal to the AST [mbody] *)
      IdLPM.eq_list_map pnds mnmtms
      end end.
@@ -891,8 +976,8 @@ Definition model_has_type (cst : cptcontext) (mst : mdlcontext)
 Hint Unfold model_welldefined.
 
 (** _Note!_ No evaluation is applied to model members (terms). 
-    So model members have to be exactly reflected in the model type
-    that is have exactly the same syntactic structure.  *)
+    Thus, model members have to be exactly reflected in the model type
+    that has exactly the same syntactic structure.  *)
 
 (* ----------------------------------------------------------------- *)
 (** **** Checking Programs *)
@@ -909,16 +994,21 @@ Hint Unfold model_welldefined.
 Module MMdlDef_DataLC <: DataLC.
   (** One model definition is a member of models section. *)
   Definition t := modeldef.
-  (** Global context in this case is concept symbol table. *)
-  Definition ctx := cptcontext.
+  (** Global context in this case is concept symbol table
+      plus information about forbidden bound vars' names. *)
+  Definition ctx := (cptcontext * id_set) % type.
   (** Local context contains information about previously defined 
       models. *)
   Definition ctxloc := mdlcontext.
 End MMdlDef_DataLC.
 
 Module MMdlDef_DataLCOkDef <: DataLCOkDef MMdlDef_DataLC.
-  Definition is_ok (c : cptcontext) (cl : mdlcontext) (mdl : modeldef) : Prop 
-    := model_welldefined c cl mdl.
+
+  Definition is_ok (c_mdlnms : cptcontext * id_set) 
+             (cl : mdlcontext) (mdl : modeldef) : Prop :=
+    let (c, mdlnms) := c_mdlnms in
+    model_welldefined c cl mdlnms mdl.
+
 End MMdlDef_DataLCOkDef.
 
 Module MMdlDef_SinglePassMBase <: SinglePassModuleBase.
@@ -930,7 +1020,7 @@ Module MMdlDef_SinglePassMBase <: SinglePassModuleBase.
   Definition ctxl_init : mdlcontext := mstempty.
 
   (** Update local context *)
-  Definition upd_ctxloc (cl : mdlcontext) (c : cptcontext) 
+  Definition upd_ctxloc (cl : mdlcontext) (c_mdlnms : cptcontext * id_set)  
              (nm : id) (mdl : modeldef) : mdlcontext :=
     match mdl with 
       mdl_def Mname C Mbody =>
@@ -949,10 +1039,10 @@ Definition modeldef_pair_with_id (M : modeldef) : id * modeldef :=
   match M with mdl_def Mname _ _ => (Mname, M)  end.
 
 (** What it means for a model section to be well-defined. *)
-Definition modelsec_welldefined 
-           (cst : cptcontext) (mdls : modelsec) : Prop :=
+Definition modelsec_welldefined (CTbl : cptcontext) (mdls : modelsec) 
+           (mdlnames : id_set) : Prop :=
   let pmdls := map modeldef_pair_with_id mdls in
-  MMdlDef_SinglePassMDefs.module_ok cst pmdls.
+  MMdlDef_SinglePassMDefs.module_ok (CTbl, mdlnames) pmdls.
 
 Definition namedef_list_to_mty (C : id) (defs : namedef_list) : mty :=
   let nmtms := map namedef_to_pair defs in
@@ -963,16 +1053,22 @@ Definition modeldef_to_pair_id_mty (M : modeldef) : id * mty :=
     mdl_def Mname C Mbody => (Mname, namedef_list_to_mty C Mbody)  
   end.
 
+Definition model_names (MTbl : mdlcontext) : id_set :=
+  IdLS.set_from_list (map fst (IdLPM.IdMap.elements MTbl)).
+
 (** What it means for a model context to be well-defined 
  ** in the given concept context. 
  ** [mst] is well-defined if exists a well-defined AST
  ** equal to the model context.*)
 Definition mdlcontext_welldefined 
-           (cst : cptcontext) (mst : mdlcontext) : Prop :=
+           (CTbl : cptcontext) (MTbl : mdlcontext) : Prop :=
+  let mdlnames := model_names MTbl in
   exists (mdls : modelsec),
-    modelsec_welldefined cst mdls 
+    (** exists well-defined model section *)
+    modelsec_welldefined CTbl mdls mdlnames
+    (** such that model context corresponds to this section *)
     /\ let pmtys := map modeldef_to_pair_id_mty mdls in
-       IdLPM.IdMap.Equal mst (IdLPM.map_from_list pmtys).
+       IdLPM.IdMap.Equal MTbl (IdLPM.map_from_list pmtys).
 
 (*
 (** Model section (list of model definitions) has to be well-formed. 
@@ -1468,7 +1564,7 @@ Fixpoint qualify_model_members' (M : id) (toQual : IdLS.id_set) (t : tm) : tm :=
   end.
 
 Definition qualify_model_members (M : id) (Mbody : id_tm_map) (t : tm) : tm :=
-  let toQual := IdLS.set_from_list (map fst (IdLPM.IdMap.elements Mbody)) in
+  let toQual := set_of_keys Mbody in
   qualify_model_members' M toQual t.
 
 (* ================================================================= *)

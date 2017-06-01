@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 29 May 2017
+   Last Update: Wed, 31 May 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -301,25 +301,36 @@ Definition model_defined_b (st : mdlcontext) (nm : id) : bool :=
   | Some _ => true
   end.
 
+(** There are no bound variables in [t] with names from [badnames]. *)
+
+Definition no_bound_var_names_in_term_b 
+           (badnames : id_set) (t : tm) : bool :=
+  IdLS.IdSet.for_all 
+    (fun (x : id) => negb (IdLS.IdSet.mem x badnames))
+    (bound_vars t).
+
 (** Function [model_member_valid_b] corresponds to the [model_member_valid]
     relation of member's validity. *)
 
-Definition model_member_valid_b (cst : cptcontext) (mst : mdlcontext)
-                                (fnmtys : id_ty_map) (prevmems : id_ty_map)
-                                (nm : id) (t : tm) : bool :=
-
+Definition model_member_valid_b (CTbl : cptcontext) (MTbl : mdlcontext)
+           (mdlnames : id_set) (fnmtys : id_ty_map) (prevmems : id_ty_map)
+           (nm : id) (t : tm) : bool :=
   let Gamma := IdLPM.IdMap.fold 
-                 (fun nm tp ctx => update ctx nm (tmtype tp))
+                 (fun nm tp G => update G nm (tmtype tp))
                  prevmems ctxempty in
   (** there is [nm : T] in a concept *)
   match find_ty nm fnmtys with
   | Some T =>
+    (** term does not contain bad names *)
+    if (no_bound_var_names_in_term_b mdlnames t)
+    then
     (** and [T] is a type of [t], that is 
         [cst * mst ; Gamma |- t : T] *)
-    match type_check cst mst Gamma t with
-    | Some T' => if beq_ty T T' then true else false
-    | _ => false  
-    end
+      match type_check CTbl MTbl Gamma t with
+      | Some T' => if beq_ty T T' then true else false
+      | _ => false  
+      end
+    else false
   | _ => false
   end.
 
