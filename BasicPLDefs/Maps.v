@@ -259,3 +259,11 @@ Proof.
   + rewrite update_neq in H; assumption.
 Qed.
 
+Theorem eq_Some_not_None :
+  forall (X : Type) x v (m : partial_map X),
+    m x = Some v -> m x <> None.
+Proof.
+  intros X x v m Heq contra.
+  rewrite Heq in contra.
+  inversion contra.
+Qed.

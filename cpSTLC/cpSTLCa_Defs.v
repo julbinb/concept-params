@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Wed, 31 May 2017
+   Last Update: Mon, 5 Jun 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -612,7 +612,7 @@ Definition cptcontext_welldefined (cst : cptcontext) : Prop :=
                    -----------------------------------                (T_CInvk)
                    CTable * MTable ; Gamma |- c.f : TF
 
-                            M \notin dom(Gamma)
+                             M#C \notin Gamma 
                              M \in dom(MTable)
                           MTable(M) = ... of C ...
                              C \in dom(CTable)
@@ -731,7 +731,7 @@ Inductive has_type : cptcontext -> mdlcontext -> context -> tm -> ty -> Prop :=
       concept_fun_member CTable C f TF ->
       CTable $ MTable ; Gamma |- tcinvk c f \in TF
   | T_MInvk : forall CTable MTable Gamma M C Mbody f TF,
-      Gamma M = None ->
+      (~ exists MC, Gamma M = Some (cpttype MC)) ->
       IdLPM.IdMap.find M MTable = Some (MTdef C Mbody) ->
       concept_fun_member CTable C f TF ->
       CTable $ MTable ; Gamma |- tcinvk M f \in TF
@@ -815,6 +815,50 @@ Definition model_defined (st : mdlcontext) (nm : id) : Prop :=
     * check that bound variables do not use these names.
  *)
 
+(** Returns set of names of all bound concept variables used in the term. *)
+Fixpoint bound_cvars (t : tm) : id_set := 
+  match t with
+  (* BCV(x) = {} *)
+  | tvar x      => IdLS.IdSet.empty  
+  (* BCV(t1 t2)  = BCV(t1) \union BCV(t2) *)
+  | tapp t1 t2  => IdLS.IdSet.union (bound_cvars t1) (bound_cvars t2)
+  (* BCV(\x:T.t) = BCV(t) *)                               
+  | tabs x T t  => bound_cvars t
+  (* BCV(t # M)  = BCV(t) *)   
+  | tmapp t M   => bound_cvars t   
+  (* BCV(\c#C.t) = BCV(t) \union {c} *)
+  | tcabs c C t => IdLS.IdSet.add c (bound_cvars t)
+  (* BCV(c.f) = {} *)
+  | tcinvk c f  => IdLS.IdSet.empty
+  (* BCV(true) = {} *)
+  | ttrue       => IdLS.IdSet.empty
+  (* BCV(false) = {} *)
+  | tfalse      => IdLS.IdSet.empty
+  (* BCV(if t1 then t2 else t3) = BCV(t1) \union BCV(t2) \union BCV(t3) *)
+  | tif t1 t2 t3 => IdLS.IdSet.union 
+                      (IdLS.IdSet.union (bound_cvars t1) (bound_cvars t2)) 
+                      (bound_cvars t3)
+  (* BCV(n) = {} *)
+  | tnat n      => IdLS.IdSet.empty
+  (* BCV(succ t) = BCV(t) *)
+  | tsucc t     => bound_cvars t
+  (* BCV(pred t) = BCV(t) *)
+  | tpred t     => bound_cvars t
+  (* BCV(plus t1 t2) = BCV(t1) \union BCV(t2) *)
+  | tplus t1 t2  => IdLS.IdSet.union (bound_cvars t1) (bound_cvars t2)
+  (* BCV(minus t1 t2) = BCV(t1) \union BCV(t2) *)
+  | tminus t1 t2 => IdLS.IdSet.union (bound_cvars t1) (bound_cvars t2)
+  (* BCV(mult t1 t2) = BCV(t1) \union BCV(t2) *)
+  | tmult t1 t2  => IdLS.IdSet.union (bound_cvars t1) (bound_cvars t2)
+  (* BCV(eqnat t1 t2) = BCV(t1) \union BCV(t2) *)
+  | teqnat t1 t2 => IdLS.IdSet.union (bound_cvars t1) (bound_cvars t2)
+  (* BCV(lenat t1 t2) = BCV(t1) \union BCV(t2) *)
+  | tlenat t1 t2 => IdLS.IdSet.union (bound_cvars t1) (bound_cvars t2)
+  (* BCV(let x=t1 in t2) = BCV(t1) \union BCV(t2) \union {x} *)       
+  | tlet x t1 t2 => IdLS.IdSet.union (bound_cvars t1) (bound_cvars t2)
+  end.
+
+(*
 (** Returns set of names of all bound variables used in the term. *)
 Fixpoint bound_vars (t : tm) : id_set := 
   match t with
@@ -859,7 +903,17 @@ Fixpoint bound_vars (t : tm) : id_set :=
                       (IdLS.IdSet.singleton x)
                       (IdLS.IdSet.union (bound_vars t1) (bound_vars t2))
   end.
+*)
 
+(** There are no bound concept variables in [t] 
+ ** with names from [badnames]. *)
+Definition no_bound_cvar_names_in_term 
+           (badnames : id_set) (t : tm) : Prop :=
+  forall (x : id), 
+    IdLS.IdSet.In x badnames ->
+    ~ IdLS.IdSet.In x (bound_cvars t).
+
+(*
 (** There are no bound variables in [t] with names from [badnames]. *)
 
 Definition no_bound_var_names_in_term 
@@ -867,6 +921,7 @@ Definition no_bound_var_names_in_term
   forall (x : id), 
     IdLS.IdSet.In x badnames ->
     ~ IdLS.IdSet.In x (bound_vars t).
+*)
 
 Definition model_member_valid (CTbl : cptcontext) (MTbl : mdlcontext)
            (mdlnames : id_set) (cpt : id_ty_map) (prevmems : id_ty_map)
@@ -877,8 +932,9 @@ Definition model_member_valid (CTbl : cptcontext) (MTbl : mdlcontext)
   exists (T : ty),
     (** there is [nm : T] in a concept *)
     find_ty nm cpt = Some T
-    (** no model names from [mdlnames] are used for names of bound vars *)
-    /\ no_bound_var_names_in_term mdlnames t
+    (** no model names from [mdlnames] are used for names 
+        of bound concept vars *)
+    /\ no_bound_cvar_names_in_term mdlnames t
     (** and [T] is a type of [t], that is 
         [CTbl $ MTbl ; Gamma |- t : T] *)
     /\ has_type CTbl MTbl Gamma t T.
@@ -1512,18 +1568,14 @@ Fixpoint qualify_model_members' (M : id) (toQual : IdLS.id_set) (t : tm) : tm :=
         tapp (qualify_model_members' M toQual t1) 
              (qualify_model_members' M toQual t2)
     | tabs x T t1 => 
-        let toQual' := (if id_mem x toQual 
-                        (* no need to qualify x in t1 *)
-                        then IdLS.IdSet.remove x toQual
-                        else toQual) in
+        (* no need to qualify bound variable *)
+        let toQual' := (IdLS.IdSet.remove x toQual) in
         tabs x T (qualify_model_members' M toQual' t1)
     | tmapp t1 N  =>
         tmapp (qualify_model_members' M toQual t1) N
     | tcabs c C t1 =>
-        let toQual' := (if id_mem c toQual 
-                        (* no need to qualify c in t1 *)
-                        then IdLS.IdSet.remove c toQual
-                        else toQual) in
+        (* no need to qualify bound variable *)
+        let toQual' := IdLS.IdSet.remove c toQual in
         tcabs c C (qualify_model_members' M toQual' t1)
     | tcinvk c f =>
         tcinvk c f
@@ -1555,10 +1607,7 @@ Fixpoint qualify_model_members' (M : id) (toQual : IdLS.id_set) (t : tm) : tm :=
         tlenat (qualify_model_members' M toQual t1) 
                (qualify_model_members' M toQual t2)
     | tlet x t1 t2 => 
-        let toQual' := (if id_mem x toQual 
-                        (* no need to qualify x in t1 *)
-                        then IdLS.IdSet.remove x toQual
-                        else toQual) in
+        let toQual' := IdLS.IdSet.remove x toQual in
         tlet x (qualify_model_members' M toQual t1) 
                (qualify_model_members' M toQual' t2)
   end.

@@ -6,7 +6,7 @@
    Definitions of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Wed, 31 May 2017
+   Last Update: Mon, 5 Jun 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -39,8 +39,6 @@ Require Import ConceptParams.cpSTLC.cpSTLCa_Defs.
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Bool.Bool.
-
-Require Import Coq.omega.Omega.
 
 
 (* ################################################################# *)
@@ -236,7 +234,7 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
         | _, _ => None
       end
   | tcinvk c f =>
-      (* if c:C \in Gamma, C:CT \in CTable, and f:TF \in CT,
+      (* if c#C \in Gamma, C:CT \in CTable, and f:TF \in CT,
          then c.f : TF *)
       match Gamma c with
       | Some (cpttype C) => 
@@ -245,18 +243,20 @@ Fixpoint type_check (CTable : cptcontext) (MTable : mdlcontext)
         | _ => None
         end
       (* c is not a name of concept parameter *)
-      | Some _ => None
-      (* if M \notin dom(Gamma), M = ... of C ..., 
+      | Some _
+      (* or M \notin dom(Gamma) *)
+      | None => 
+      (* M = ... of C ..., 
          C:CT \in CTable, and f:TF \in CT,
          then M.f : TF *)
-      | None => match IdLPM.IdMap.find c MTable with
-                | Some (MTdef C Mbody) => 
-                  match IdLPM.IdMap.find C CTable with
-                  | Some (CTdef Cbody) => find_ty f Cbody 
-                  | None => None
-                  end
-                | None => None
-                end
+        match IdLPM.IdMap.find c MTable with
+        | Some (MTdef C Mbody) => 
+          match IdLPM.IdMap.find C CTable with
+          | Some (CTdef Cbody) => find_ty f Cbody 
+          | None => None
+          end
+        | None => None
+        end
       end
   | ttrue  => Some TBool
   | tfalse => Some TBool
@@ -303,11 +303,11 @@ Definition model_defined_b (st : mdlcontext) (nm : id) : bool :=
 
 (** There are no bound variables in [t] with names from [badnames]. *)
 
-Definition no_bound_var_names_in_term_b 
+Definition no_bound_cvar_names_in_term_b 
            (badnames : id_set) (t : tm) : bool :=
   IdLS.IdSet.for_all 
     (fun (x : id) => negb (IdLS.IdSet.mem x badnames))
-    (bound_vars t).
+    (bound_cvars t).
 
 (** Function [model_member_valid_b] corresponds to the [model_member_valid]
     relation of member's validity. *)
@@ -322,7 +322,7 @@ Definition model_member_valid_b (CTbl : cptcontext) (MTbl : mdlcontext)
   match find_ty nm fnmtys with
   | Some T =>
     (** term does not contain bad names *)
-    if (no_bound_var_names_in_term_b mdlnames t)
+    if (no_bound_cvar_names_in_term_b mdlnames t)
     then
     (** and [T] is a type of [t], that is 
         [cst * mst ; Gamma |- t : T] *)
