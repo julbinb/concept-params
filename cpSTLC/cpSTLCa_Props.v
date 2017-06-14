@@ -6,7 +6,7 @@
    Properties of STLC are based on
    Sofware Foundations, v.4 
   
-   Last Update: Mon, 12 Jun 2017
+   Last Update: Wed, 14 Jun 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 
@@ -483,92 +483,6 @@ Definition appears_free_in (CTbl : cptcontext) (MTbl : mdlcontext)
 
 Hint Unfold appears_free_in.
 
-Lemma free_in_context : forall CTbl MTbl x t T Gamma,
-   appears_free_in CTbl MTbl x t ->
-   CTbl $ MTbl ; Gamma |- t \in T ->
-   (exists T', Gamma x = Some (tmtype T'))
-   \/ (exists C, Gamma x = Some (cpttype C))
-   \/ (exists MT, IdLPM.IdMap.find x MTbl = Some MT).
-Proof.
-  intros CTbl MTbl x t.
-  induction t;
-    intros T Gamma Hfree HT; 
-    unfold appears_free_in in *; simpl in *;
-    inversion HT; simpl in *; subst;
-    (* we can do some automation... *)
-    try 
-    solve [
-    (* in simple cases such as [ttrue] we have a contradiction
-       in the assumption: there are no FV in the term *)
-      match goal with
-      |[ H : IdLS.IdSet.In x IdLS.IdSet.empty |- _ ]
-       => rewrite IdLS.Props.IdSetProps.Dec.F.empty_iff in H; 
-          contradiction
-      end
-    (* in recursive cases such as [tif] pt [tsucc]
-       we can simply solve it by IH *)
-    | repeat (apply IdLS.Props.IdSetProps.FM.union_1 in Hfree;
-            destruct Hfree as [Hfree | Hfree]);
-          match goal with
-          | [IHt : forall (T : ty) (Gamma : context),
-                   IdLS.IdSet.In ?x (free_vars ?CTbl ?MTbl ?t1) ->
-                   ?CTbl $ ?MTbl; Gamma |- ?t1 \in T -> _,
-               Hfree : IdLS.IdSet.In ?x (free_vars ?CTbl ?MTbl ?t1),
-               HTt : ?CTbl $ ?MTbl; ?Gamma |- ?t1 \in ?T |- _]
-            => specialize (IHt _ Gamma Hfree HTt); assumption
-          end ].
-  - (* tvar i *)
-    apply IdLS.Props.IdSetProps.FM.singleton_1 in Hfree.
-    unfold IdUOT.eq in Hfree. subst.
-    left. exists T. assumption.
-  - (* tabs *)
-    rename i into y. rename t into T11.
-    rewrite IdLS.Props.IdSetProps.Dec.F.remove_iff in Hfree.
-    destruct Hfree as [Hfree Heqxy]. unfold IdUOT.eq in *.
-    specialize (IHt _ _ Hfree H6).
-    destruct IHt as [IHt | IHt];
-      [ idtac | destruct IHt as [IHt | IHt] ];
-      destruct IHt as [V HV];
-      [ left | right; left | right; right ]; exists V;
-        pose proof (update_neq _ (tmtype T11) x y Gamma Heqxy) as HG;
-        [ rewrite <- HG | rewrite <- HG | idtac ]; assumption.
-  - (* tcabs *)
-    rename i into c. rename i0 into C.
-    rewrite IdLS.Props.IdSetProps.Dec.F.remove_iff in Hfree.
-    destruct Hfree as [Hfree Heqxy]. unfold IdUOT.eq in *.
-    specialize (IHt _ _ Hfree H7).
-    destruct IHt as [IHt | IHt];
-      [ idtac | destruct IHt as [IHt | IHt] ];
-      destruct IHt as [V HV];
-      [ left | right; left | right; right ]; exists V;
-      pose proof (update_neq _ (cpttype C) x c Gamma Heqxy) as HG;
-      [ rewrite <- HG | rewrite <- HG | idtac ]; assumption.
-  - (* [tcinvk c f] for c#C \in Gamma *)
-    rename i into c. rename i0 into f.
-    apply IdLS.Props.IdSetProps.FM.singleton_1 in Hfree.
-    unfold IdUOT.eq in Hfree. subst.
-    right. left. exists C. assumption.
-  - (* [tcinvk M f] *)
-    rename i into M. rename i0 into f.
-    apply IdLS.Props.IdSetProps.FM.singleton_1 in Hfree.
-    unfold IdUOT.eq in Hfree. subst.
-    right. right. eexists. eassumption.
-  - (* tlet *)
-    rename i into y.
-    apply IdLS.Props.IdSetProps.FM.union_1 in Hfree.
-    destruct Hfree as [Hfree | Hfree].
-    + specialize (IHt1 _ Gamma Hfree H6); assumption.
-    + rewrite IdLS.Props.IdSetProps.Dec.F.remove_iff in Hfree.
-      destruct Hfree as [Hfree Heqxy]. unfold IdUOT.eq in *.
-      specialize (IHt2 _ _ Hfree H7). 
-      destruct IHt2 as [IHt2 | IHt2];
-        [ idtac | destruct IHt2 as [IHt2 | IHt2] ];
-      destruct IHt2 as [V HV];
-      [ left | right; left | right; right ]; exists V;
-      pose proof (update_neq _ (tmtype T1) x y Gamma Heqxy) as HG;
-      [ rewrite <- HG | rewrite <- HG | idtac ]; assumption.
-Qed.
-
 Lemma context_invariance : forall CTbl MTbl Gamma Gamma' t T,
     CTbl $ MTbl ; Gamma |- t \in T  ->
     (forall x, appears_free_in CTbl MTbl x t -> Gamma x = Gamma' x) ->
@@ -669,6 +583,9 @@ Proof.
 Qed.
 
 
+(** These are auxiliary tactics to simplify proofs 
+    involving model names in terms/contexts *)
+
 Definition no_model_names_as_cvars_in_Gamma 
            (MTbl : mdlcontext) (G : context) : Prop :=
   forall M, 
@@ -728,9 +645,9 @@ Ltac prove_no_model_names_as_bound_cvars_in_subterm :=
 
 Lemma context_weakening : forall CTbl MTbl Gamma Gamma' t T,
     CTbl $ MTbl ; Gamma |- t \in T ->
-    no_model_names_as_bound_cvars_in_term MTbl t ->
+    no_model_names_as_bound_cvars_in_term MTbl t -> 
     (forall x, Gamma x <> None -> Gamma' x = Gamma x) ->
-    no_model_names_as_cvars_in_Gamma MTbl Gamma' ->
+    no_model_names_as_cvars_in_Gamma MTbl Gamma' -> 
     CTbl $ MTbl ; Gamma' |- t \in T.
 Proof.
   intros CTbl MTbl Gamma Gamma' t T HT.
@@ -766,7 +683,7 @@ Proof.
   - (* tabs *)
     apply T_Abs.
     apply IHHT.
-    prove_no_model_names_as_bound_cvars_in_subterm.
+    prove_no_model_names_as_bound_cvars_in_subterm. 
     intros z Hznone.
     destruct (beq_idP x z) as [Hxz | Hxz].
     + (* = *)
@@ -784,7 +701,7 @@ Proof.
         rewrite update_neq in HC; try assumption.
         unfold no_model_names_as_cvars_in_Gamma in Hcvars.
         apply Hcvars with M.
-        split. exists C; assumption. assumption.
+        split. exists C; assumption. assumption. 
   - (* tmapp *)
     apply T_MApp with C Mbody; try assumption.
     apply IHHT; (assumption 
@@ -792,7 +709,7 @@ Proof.
   - (* tcabs *)
     apply T_CAbs with Cbody; try assumption.
     apply IHHT.
-    prove_no_model_names_as_bound_cvars_in_subterm.
+    prove_no_model_names_as_bound_cvars_in_subterm. 
     intros z Hznone.
     destruct (beq_idP c z) as [Hcz | Hcz].
     + (* = *)
@@ -813,7 +730,7 @@ Proof.
         apply IdLS.Props.IdSetProps.Dec.F.add_1; reflexivity.
       * rewrite update_neq in HC'. 
         apply Hcvars with M. split; try assumption.
-        exists C'; assumption. assumption.
+        exists C'; assumption. assumption. 
   - (* T_CInvk *)
     apply T_CInvk with C; try assumption.
     pose proof (eq_Some_not_None _ _ _ _ H) as Hnone.
@@ -825,7 +742,7 @@ Proof.
     intros contra. apply Hcvars with M.
     split; try assumption. 
     apply IdMapProps.F.in_find_iff. intros contra'.
-    rewrite H0 in contra'. inversion contra'.
+    rewrite H0 in contra'. inversion contra'. 
   - (* tlet *)
     apply T_Let with T1.
     apply IHHT1; 
@@ -988,39 +905,9 @@ Proof.
 Qed.
 
 
-
-Lemma has_type_in_empty_context__only_model_free_vars :
-  forall CTbl MTbl t T,
-    CTbl $ MTbl ; ctxempty |- t \in T ->
-    forall x, 
-      appears_free_in CTbl MTbl x t ->
-      exists C Mbody Cbody,
-        IdLPM.IdMap.find x MTbl = Some (MTdef C Mbody)
-        /\ IdLPM.IdMap.find C CTbl = Some (CTdef Cbody).
-Proof.
-  intros CTbl MTbl t.
-  induction t;
-    intros T HT x Hapfree;
-    (inversion HT; subst; simpl).
-  - (* tvar *)
-    inversion H3.
-  - (* tapp *)
-    unfold appears_free_in in Hapfree. simpl in Hapfree.
-    apply IdLS.Props.IdSetProps.Dec.F.union_1 in Hapfree.
-    destruct Hapfree as [Hapfree | Hapfree].
-    
-(*
- T HT. (* free_in_context *)
-  induction HT
-*)
-Abort.
-
-
 (* ----------------------------------------------------------------- *)
 (** **** Aux Props about QMM (qualify_model_members) *)
 (* ----------------------------------------------------------------- *)
-
-
 
 Lemma qualify_model_members'_preserves_typing_for_good_Gamma' :
   forall (CTbl : cptcontext) (MTbl : mdlcontext)
@@ -1039,10 +926,8 @@ Lemma qualify_model_members'_preserves_typing_for_good_Gamma' :
                  /\ (forall Tx', 
                       Gamma x = Some (tmtype Tx') ->
                       Tx = Tx')) -> 
-    (* M is not in MTbl *)                 
-    ~ IdLPM.IdMap.In M MTbl ->
-    (* M is not used for concept parameter names *)
-    ~ IdLS.IdSet.In M (bound_cvars tf) ->
+    (* M in MTbl *)
+    IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
     (* Gamma' contains not-to-qualify variables from Gamma *)
     (forall x, Gamma x <> None ->
                (~ IdLS.IdSet.In x mdlmems 
@@ -1052,14 +937,14 @@ Lemma qualify_model_members'_preserves_typing_for_good_Gamma' :
     ~ (exists MC, Gamma' M = Some (cpttype MC)) ->
     (* Gamma' does not contain other model names from MTbl *)
     no_model_names_as_cvars_in_Gamma MTbl Gamma' ->
-    let MTbl' := IdLPM.IdMap.add M (MTdef C Mbody) MTbl in
     let tf'   := qualify_model_members' M mdlmems tf in 
-    CTbl $ MTbl' ; Gamma' |- tf' \in Tf.
+    CTbl $ MTbl ; Gamma' |- tf' \in Tf.
 Proof.
   intros CTbl MTbl Gamma tf. generalize dependent Gamma.
   induction tf;
     intros Gamma Tf mdlmems C Cbody M Mbody Gamma';
-    intros HT HtfMT HfindC HGamma HMnin HMtf HGamma' HGamma'M HGamma'MTbl;
+    intros HT HtfMT HfindC HGamma HMMTbl 
+           HGamma' HGamma'M HGamma'MTbl;
     (inversion HT; subst; simpl);
     unfold id_mem in *;
   (* trivial cases such as [ttrue] can be solved *)
@@ -1077,17 +962,15 @@ Proof.
            HCbody : context [ Some (CTdef Cbody) ]
            |- has_type ?CTbl ?MTbl' ?Gamma' 
                        (qualify_model_members' _ _ ?st) ?ST]
-          => apply IHst with Gamma Cbody;
-             try (assumption || prove_no_bound_cvar_in_subterm
-                  || prove_no_model_names_as_bound_cvars_in_subterm)
-        end ].
+          => apply IHst with Gamma C Cbody Mbody;
+             try (assumption || prove_no_model_names_as_bound_cvars_in_subterm)
+        end ]. 
   - (* tvar *)
     rename i into f.
     destruct (IdLS.IdSet.mem f mdlmems) eqn:Hmemf.
     + (* f in mdlnames *)
       apply T_MInvk with C Mbody.
-      assumption.
-      apply IdMapProps.F.add_eq_o. reflexivity.
+      assumption. assumption.
       unfold concept_fun_member. rewrite HfindC.
       apply IdLS.Props.IdSetProps.Dec.F.mem_2 in Hmemf.
       specialize (HGamma f Hmemf).
@@ -1101,16 +984,15 @@ Proof.
       apply IdLS.Props.IdSetProps.Dec.F.not_mem_iff. assumption.
   - (* tapp *)
     apply T_App with T11.
-    apply IHtf1 with Gamma Cbody; 
-      try (assumption || prove_no_bound_cvar_in_subterm
-          || prove_no_model_names_as_bound_cvars_in_subterm).
-    apply IHtf2 with Gamma Cbody; 
-      try (assumption || prove_no_bound_cvar_in_subterm
-          || prove_no_model_names_as_bound_cvars_in_subterm).
+    apply IHtf1 with Gamma C Cbody Mbody; 
+      try (assumption || prove_no_model_names_as_bound_cvars_in_subterm).
+    apply IHtf2 with Gamma C Cbody Mbody; 
+      try (assumption || prove_no_model_names_as_bound_cvars_in_subterm).
   - (* tabs *)
     rename i into x. rename t into T.
     apply T_Abs.
-    apply IHtf with (Gamma := update Gamma x (tmtype T)) (Cbody := Cbody);
+    apply IHtf
+    with (update Gamma x (tmtype T)) C Cbody Mbody;
       try assumption.
     + (* Gamma *)
       intros z Hzin.
@@ -1162,18 +1044,13 @@ Proof.
     rename i into N.
     apply T_MApp with C0 Mbody0.
     + (* find N MTbl' *)
-      assert (HN : IdLPM.IdMap.find N MTbl <> None).
-      { intros contra. rewrite H4 in contra. inversion contra. }
-      apply IdMapProps.F.in_find_iff in HN.
-      rewrite IdMapProps.F.add_neq_o. assumption.
-      intros contra. unfold IdUOTOrig.eq in contra. subst.
-      apply HMnin in HN. contradiction.
+      assumption.
     + (* typing *) 
-      apply IHtf with Gamma Cbody; assumption.
+      apply IHtf with Gamma C Cbody Mbody; assumption.
   - (* tcabs *)
     rename i into c. rename i0 into C'.
     apply T_CAbs with Cbody0. assumption.
-    apply IHtf with (Gamma := update Gamma c (cpttype C')) (Cbody := Cbody);
+    apply IHtf with (update Gamma c (cpttype C')) C Cbody Mbody;
       try assumption.
     + (* no model names *)
       prove_no_model_names_as_bound_cvars_in_subterm.
@@ -1187,17 +1064,6 @@ Proof.
       intros Tz' HGTz. 
       rewrite update_neq in HGTz; try assumption. 
       apply HGamma. assumption.
-    + (* no_bound_cvars *)
-      simpl in HMtf. 
-      destruct (beq_idP M c) as [HcM | HcM].
-      * (* c = M *)
-        subst. 
-        assert (contra : IdLS.IdSet.In c (IdLS.IdSet.add c (bound_cvars tf))).
-        { apply IdLS.Props.IdSetProps.Dec.F.add_1. reflexivity. }
-        apply HMtf in contra. contradiction.
-      * (* c <> M *)
-        intros contra. apply HMtf.
-        apply IdLS.Props.IdSetProps.Dec.F.add_2. assumption.
     + (* Gamma' *)
       intros z HGammaz.
       destruct (beq_idP c z) as [Hcz | Hcz].
@@ -1220,13 +1086,14 @@ Proof.
           rewrite update_neq in Hcpt; try assumption.
           eexists. eassumption.
     + (* HGamma' M *)
-      simpl in HMtf.
       intros HGM'. destruct HGM' as [MC HGM'].
       destruct (beq_idP c M) as [HcM | HcM].
       * subst. 
-        assert (contra : IdLS.IdSet.In M (IdLS.IdSet.add M (bound_cvars tf))).
-        { apply IdLS.Props.IdSetProps.Dec.F.add_1. reflexivity. }
-        apply HMtf in contra. contradiction.
+        unfold no_model_names_as_bound_cvars_in_term in HtfMT.
+        apply HtfMT. exists M. split.
+        simpl. apply IdLS.Props.IdSetProps.Dec.F.add_1. reflexivity.
+        unfold IdLPM.IdMap.In. eexists. 
+        apply IdMapProps.F.find_mapsto_iff. eassumption.
       * rewrite update_neq in HGM'; try assumption.
         apply HGamma'M. eexists. eassumption.
     + (* No models in Gamma' *)
@@ -1241,7 +1108,7 @@ Proof.
         apply IdLS.Props.IdSetProps.Dec.F.add_1. reflexivity. assumption.
       rewrite update_neq in Hupd; try assumption.
         apply HGamma'MTbl with M0. split; try assumption.
-        eexists; eassumption.
+        eexists; eassumption. 
   - (* T_CInvk *)
     rename i into c. rename i0 into f.
     apply T_CInvk with C0. rewrite <- H4. 
@@ -1259,18 +1126,12 @@ Proof.
       split. assumption.
       apply IdMapProps.F.in_find_iff. 
       intros contra. rewrite H5 in contra. inversion contra.
-    + (* find N *)
-      rewrite IdMapProps.F.add_neq_o. assumption.
-      intros contra. unfold IdUOTOrig.eq in contra. subst.
-      apply HMnin. apply IdMapProps.F.in_find_iff.
-      intros contra. rewrite H5 in contra. inversion contra.
   - (* tlet *)
     rename i into x. 
     apply T_Let with T1.
-    apply IHtf1 with Gamma Cbody; 
-      try (assumption || prove_no_bound_cvar_in_subterm
-          || prove_no_model_names_as_bound_cvars_in_subterm).    
-    apply IHtf2 with (Gamma := update Gamma x (tmtype T1)) (Cbody := Cbody);
+    apply IHtf1 with Gamma C Cbody Mbody; 
+      try (assumption || prove_no_model_names_as_bound_cvars_in_subterm).    
+    apply IHtf2 with (update Gamma x (tmtype T1)) C Cbody Mbody;
       try assumption.
     + prove_no_model_names_as_bound_cvars_in_subterm.
     + (* Gamma *)
@@ -1283,7 +1144,7 @@ Proof.
       intros Tz' HGTz. 
       rewrite update_neq in HGTz; try assumption. 
       apply HGamma. assumption.
-    + prove_no_bound_cvar_in_subterm.
+(*    + prove_no_bound_cvar_in_subterm. *)
     + (* Gamma' *)
       intros z HGammaz.
       destruct (beq_idP x z) as [Hxz | Hxz].
@@ -1341,19 +1202,16 @@ Lemma qualify_model_members'_preserves_typing_for_good_Gamma :
         exists Tx, 
           IdLPM.IdMap.find x Cbody = Some Tx
           /\ (Gamma x <> None -> Gamma x = Some (tmtype Tx))) ->
-    (* M is not in MTbl *)                 
-    ~ IdLPM.IdMap.In M MTbl ->
-    (* M is not used for concept parameter names *)
-    ~ IdLS.IdSet.In M (bound_cvars tf) ->
-    let MTbl' := IdLPM.IdMap.add M (MTdef C Mbody) MTbl in
+    (* M in MTbl *)
+    IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
     let tf'   := qualify_model_members' M mdlmems tf in 
-    CTbl $ MTbl' ; ctxempty |- tf' \in Tf.
+    CTbl $ MTbl ; ctxempty |- tf' \in Tf.
 Proof.
   intros CTbl MTbl Gamma tf Tf mdlmems C Cbody M Mbody.
-  intros HT HMTtf HfindC HGamma Hmems Hnin HMnin.
+  intros HT HMTtf HfindC HGamma Hmems HMMtbl.
   simpl. 
   apply qualify_model_members'_preserves_typing_for_good_Gamma'
-    with Gamma Cbody; 
+    with Gamma C Cbody Mbody; 
     try assumption.
   + (* Gamma *)
     intros z Hinz. assert (Hmems' := Hmems).
@@ -1382,8 +1240,7 @@ Qed.
 
 Lemma qualify_model_members'_preserves_term_in_empty' :
   forall (CTbl : cptcontext) (MTbl : mdlcontext) M
-         (tf : tm) (Tf : ty)
-         Gamma mdlmems,
+         (tf : tm) (Tf : ty) Gamma mdlmems,
     (* [tf] has type [Tf] *)
     CTbl $ MTbl ; Gamma |- tf \in Tf ->
     (* Gamma does not contain names to qualify *)
@@ -1481,30 +1338,33 @@ Proof.
       specialize (HGamma _ Hz). tauto.
 Qed.
 
-
 Lemma qualify_model_members'_preserves_term_in_empty :
   forall (CTbl : cptcontext) (MTbl : mdlcontext) M
-         (tf : tm) (Tf : ty)
-         mdlmems,
+         (tf : tm) (Tf : ty) mdlmems,
     (* [tf] has type [Tf] *)
     CTbl $ MTbl ; ctxempty |- tf \in Tf ->
     (* term does not contain concept vars named as model names *)
     no_model_names_as_bound_cvars_in_term MTbl tf ->
-    (* M is not in MTbl *)                 
-    ~ IdLPM.IdMap.In M MTbl ->
-    (* M is not used for concept parameter names *)
-    ~ IdLS.IdSet.In M (bound_cvars tf) ->
+    (* M in MTbl *)
+    (exists MT, IdLPM.IdMap.find M MTbl = Some MT) ->
     let tf' := qualify_model_members' M mdlmems tf in 
     tf = tf'.
 Proof.
-  intros CTbl MTbl M tf Tf mdlmems HT Hcvars HninM HtfM.
+  intros CTbl MTbl M tf Tf mdlmems HT Hcvars (*HninM HtfM*) HfindM.
   apply qualify_model_members'_preserves_term_in_empty'
   with CTbl MTbl Tf ctxempty;
     try assumption.
   intros x contra. 
   unfold ctxempty in contra. rewrite apply_empty in contra.
   exfalso. apply contra. reflexivity.
+  destruct HfindM as [MT HfindM].
+  intros contra. 
+  unfold no_model_names_as_bound_cvars_in_term in Hcvars.
+  apply Hcvars. exists M. split.
+  assumption. unfold IdLPM.IdMap.In.
+  eexists. rewrite IdMapProps.F.find_mapsto_iff. eassumption.
 Qed.
+
 
 Lemma in_keys_of_elements :
   forall (V : Type) (k : id) (m : id_map V),
@@ -1523,7 +1383,6 @@ Proof.
   - apply IHelems' in Hin. destruct Hin as [v Hin].
     exists v. right. assumption.
 Qed.
-
 
 Lemma in_set_of_keys__in_map :
   forall (V : Type) (x : id) (m : id_map V),
@@ -1574,26 +1433,21 @@ Proof.
 Qed.
 
 
-
 (** 
 We need something to prove typing of model members.
 *)
-
-
-
-
 
 Lemma fold_left_members_ok__inital_prop :
   forall CTbl MTbl mdlnames Cbody pnds P cl,
     fst
       (fold_left
-         (fun (okAndCl : Prop * id_ty_map) (dt : id * tm) =>
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
             let (ok, cl) := okAndCl in
             (let (nm, d) := dt in
              model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
              let (nm, _) := dt in
              match find_ty nm Cbody with
-             | Some tp => IdLPM.IdMap.add nm tp cl
+             | Some tp => update cl nm (tmtype tp)
              | None => cl
              end))
          pnds
@@ -1609,35 +1463,34 @@ Proof.
   specialize (IHpnds' 
                 (model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ P)
                 (match find_ty nm Cbody with
-                 | Some tp => IdLPM.IdMap.add nm tp cl
+                 | Some tp => update cl nm (tmtype tp)
                  | None => cl
                  end) 
              H).
   tauto.
 Qed.
 
-
 Lemma fold_left_members_ok__last_cl_includes_cl :
   forall CTbl MTbl mdlnames Cbody pnds P cl okF clF,
     (okF, clF)
     = (fold_left
-         (fun (okAndCl : Prop * id_ty_map) (dt : id * tm) =>
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
             let (ok, cl) := okAndCl in
             (let (nm, d) := dt in
              model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
              let (nm, _) := dt in
              match find_ty nm Cbody with
-             | Some tp => IdLPM.IdMap.add nm tp cl
+             | Some tp => update cl nm (tmtype tp)
              | None => cl
              end))
          pnds
          (P, cl)) ->
     okF ->
-    (~ exists f, IdLPM.IdMap.In f cl /\ List.In f (map fst pnds)) ->
+    (~ exists f, cl f <> None /\ List.In f (map fst pnds)) ->
     List.NoDup (map fst pnds) ->
     forall f Tf,
-      IdLPM.IdMap.MapsTo f Tf cl ->
-      IdLPM.IdMap.MapsTo f Tf clF.
+      cl  f = Some Tf ->
+      clF f = Some Tf.
 Proof.
   intros CTbl MTbl mdlnames Cbody pnds.
   induction pnds as [| [f tf] pnds' IHpnds'];
@@ -1650,7 +1503,7 @@ Proof.
   specialize (IHpnds' 
                 (model_member_valid CTbl MTbl mdlnames Cbody cl f tf /\ P)
                 (match find_ty f Cbody with
-                 | Some tp => IdLPM.IdMap.add f tp cl
+                 | Some tp => update cl f (tmtype tp)
                  | None => cl
                  end)).
   specialize (IHpnds' okF clF Heqfold).
@@ -1659,13 +1512,12 @@ Proof.
     intros Hexcontra.
     destruct Hexcontra as [f0 [Hf0incl Hf0inpnds']].
     destruct (find_ty f Cbody) eqn:Heqfind.
-    + rewrite IdMapProps.F.add_in_iff in Hf0incl.
-      destruct Hf0incl as [Hf0 | Hf0].
-      * unfold IdUOTOrig.eq in Hf0. subst.
-        inversion Hnodup. subst.
+    + destruct (beq_idP f f0) as [Hff0 | Hff0].
+      * subst. inversion Hnodup. subst.
         apply H1 in Hf0inpnds'. contradiction.
       * apply Hpndsok. exists f0.
-        split. assumption. right. assumption.
+        split. rewrite update_neq in Hf0incl. 
+        assumption. assumption. right. assumption.
     + apply Hpndsok. exists f0. 
       split. assumption. right. assumption.
   - (* no dup *)
@@ -1675,225 +1527,144 @@ Proof.
     + destruct (beq_idP f f') as [Hff' | Hff'].
       * subst. exfalso. apply Hpndsok.
         exists f'. split. 
-        unfold IdLPM.IdMap.In. 
-        exists tf'. assumption.
+        intros contra. rewrite Hmapsf' in contra. inversion contra.
         left; reflexivity.
-      * apply IdMapProps.F.add_neq_mapsto_iff; assumption.
+      * rewrite update_neq; assumption. 
     + assumption.
 Qed.
-  
-Lemma elem_in_cl__elem_in_derived_Gamma :
-  forall cl cl' Gamma Gamma',
-    (forall f Tf,
-      IdLPM.IdMap.MapsTo f Tf cl ->
-      IdLPM.IdMap.MapsTo f Tf cl') ->
-    Gamma 
-    = IdLPM.IdMap.fold
-        (fun (nm : IdLPM.IdMap.key) (tp : ty) (G : partial_map ctxvarty) =>
-           update G nm (tmtype tp)) 
-        cl ctxempty ->
-    Gamma'
-    = IdLPM.IdMap.fold
-        (fun (nm : IdLPM.IdMap.key) (tp : ty) (G : partial_map ctxvarty) =>
-           update G nm (tmtype tp)) 
-        cl' ctxempty ->
-    forall x,
-      Gamma x <> None ->
-      Gamma' x = Gamma x.
-Proof.
-  pose proof (@IdLPM.Props.IdMapProps.fold_rec ty context) as Hind.
-  remember 
-    (fun cl Gamma =>
-       forall (cl' : IdLPM.IdMap.t ty) (Gamma' : partial_map ctxvarty),
-         (forall (f : IdLPM.IdMap.key) (Tf : ty),
-             IdLPM.IdMap.MapsTo f Tf cl -> IdLPM.IdMap.MapsTo f Tf cl') ->
-         Gamma =
-         IdLPM.IdMap.fold
-           (fun (nm : IdLPM.IdMap.key) (tp : ty) (G : partial_map ctxvarty) =>
-              update G nm (tmtype tp)) cl ctxempty ->
-         Gamma' =
-         IdLPM.IdMap.fold
-           (fun (nm : IdLPM.IdMap.key) (tp : ty) (G : partial_map ctxvarty) =>
-              update G nm (tmtype tp)) cl' ctxempty ->
-         forall x : id, Gamma x <> None -> Gamma' x = Gamma x)
-    as P.
-  remember (fun (nm : IdLPM.IdMap.key) (tp : ty) (G : partial_map ctxvarty) =>
-              update G nm (tmtype tp))
-    as f.
-(*
-  specialize (Hind P f).
-  intros cl. specialize (Hind ctxempty cl).
-  intros cl' Gamma. generalize dependent cl'. 
-  assert (Hind_empty : 
-            forall m : IdLPM.IdMap.t ty, IdLPM.IdMap.Empty m -> P m ctxempty).
-  { intros m Hempty.
-    subst P. intros.
-    unfold ctxempty in *. 
-    rewrite apply_empty in H2. tauto. }
-  specialize (Hind Hind_empty). clear Hind_empty.
-  
-  assert (Hind_step :
-            (forall (k : IdLPM.IdMap.key) (e : ty) (a : context)
-                    (m' m'' : IdLPM.IdMap.t ty),
-                IdLPM.IdMap.MapsTo k e cl ->
-                ~ IdLPM.IdMap.In k m' ->
-                IdLPM.Props.IdMapProps.Add k e m' m'' -> 
-                P m' a -> P m'' (f k e a))).
-  { intros nm tp Gamma0 m' m''.
-    intros Hmapscl Hnotinnm Haddnm.
-    intros Hm'. subst P. 
-    intros cl' Gamma' Hcl' HGamma0 HGamma' z Hnone.
-    destruct (beq_idP z nm
 
-
-(*  generalize dependent Gamma. generalize dependent cl. *)
-  specialize (Hind ctxempty).
-  
-
-  rewrite <- HeqP.
-  
-
-
-  pose proof (@IdLPM.Props.IdMapProps.map_induction ty) as Hind.
-  remember (fun cl =>
-              forall (cl' : IdLPM.IdMap.t ty) (Gamma Gamma' : partial_map ctxvarty),
-                (forall (f : IdLPM.IdMap.key) (Tf : ty),
-                    IdLPM.IdMap.MapsTo f Tf cl -> IdLPM.IdMap.MapsTo f Tf cl') ->
-                Gamma =
-                IdLPM.IdMap.fold
-                  (fun (nm : IdLPM.IdMap.key) (tp : ty) (G : partial_map ctxvarty) =>
-                     update G nm (tmtype tp)) cl ctxempty ->
-                Gamma' =
-                IdLPM.IdMap.fold
-                  (fun (nm : IdLPM.IdMap.key) (tp : ty) (G : partial_map ctxvarty) =>
-                     update G nm (tmtype tp)) cl' ctxempty ->
-                forall x : id, Gamma x <> None -> Gamma' x = Gamma x)
-           as P.
-  specialize (Hind P). 
-  intros cl. rewrite <- (HeqP cl).
-
-apply Hind.
-
-  apply Hind with (m := cl).
-  - (* empty case *)
-    intros.
-
-
-  apply IdLPM.Props.IdMapProps.fold_rec.
-  - (* empty case *)
-    intros m Hempty cl' Gamma Gamma' Hcl'.
-    intros HeqGamma HwqGamma' z contra.
-    subst. unfold ctxempty in *. 
-    rewrite apply_empty in contra. tauto.
-  - (* inductive case *)
-    intros nm tp Gamma0 m' m''.
-    intros Hclmaps. intros Hnmm'.
-    intros Hm'm''nm. 
-    intros IH.
-    intros cl' Gamma Gamma'.
-    intros Hcl'. intros HeqGamma HeqGamma'.
-    intros z HzGamma.
-  
-IdLPM.Props.IdMapProps .IdMap
-*)
-Abort.
-
-
-Lemma fold_left_members_ok__ok_in_last_cl' :
-  forall CTbl MTbl mdlnames Cbody pnds P cl,
+Lemma fold_left_members_ok__no_model_names_in_last_cl :
+  forall CTbl MTbl mdlnames Cbody pnds P cl okF clF,
     IdLS.IdSet.Subset (set_of_keys MTbl) mdlnames ->
-    let (okF, clF) :=
-      (fold_left
-         (fun (okAndCl : Prop * id_ty_map) (dt : id * tm) =>
+    (okF, clF) 
+    = (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
             let (ok, cl) := okAndCl in
             (let (nm, d) := dt in
              model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
              let (nm, _) := dt in
              match find_ty nm Cbody with
-             | Some tp => IdLPM.IdMap.add nm tp cl
+             | Some tp => update cl nm (tmtype tp)
              | None => cl
              end))
          pnds
-         (P, cl)) in
+         (P, cl)) ->
     okF ->
+    no_model_names_as_cvars_in_Gamma MTbl cl ->
+    no_model_names_as_cvars_in_Gamma MTbl clF.
+Proof.
+  intros CTbl MTbl mdlnames Cbody pnds.
+  induction pnds as [| [f' tf'] pnds' IHpnds'];
+    intros P cl okF clF Hsubset Heqfold HokF Hcl; simpl.
+  (* pnds = nil *)
+  simpl in *. inversion Heqfold. assumption.
+  (* pnds = [f' tf'] :: pnds' *)
+  simpl in Heqfold.
+  specialize (IHpnds' 
+                (model_member_valid CTbl MTbl mdlnames Cbody cl f' tf' /\ P)
+                (match find_ty f' Cbody with
+                 | Some tp => update cl f' (tmtype tp)
+                 | None => cl
+                 end)
+                okF clF Hsubset Heqfold HokF).
+  apply IHpnds'.
+ - (* no model names *)
+   destruct (find_ty f' Cbody) eqn:Heqfind; try assumption.
+   unfold no_model_names_as_cvars_in_Gamma.
+   intros M [HMfind HMin].
+   destruct HMfind as [C HMfind].
+   destruct (beq_idP f' M) as [Hf'M | Hf'M].
+   + subst. rewrite update_eq in HMfind.
+     inversion HMfind.
+   + rewrite update_neq in HMfind; try assumption.
+     unfold no_model_names_as_cvars_in_Gamma in Hcl.
+     specialize (Hcl M).
+     apply Hcl. split.
+     exists C; assumption. assumption.
+Qed.
+
+Lemma fold_left_members_ok__ok_in_last_cl' :
+  forall CTbl MTbl mdlnames Cbody pnds P cl okF clF,
+    IdLS.IdSet.Subset (set_of_keys MTbl) mdlnames ->
+    (okF, clF) 
+    = (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
+            let (ok, cl) := okAndCl in
+            (let (nm, d) := dt in
+             model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+             let (nm, _) := dt in
+             match find_ty nm Cbody with
+             | Some tp => update cl nm (tmtype tp)
+             | None => cl
+             end))
+         pnds
+         (P, cl)) ->
+    okF ->
+    no_model_names_as_cvars_in_Gamma MTbl cl ->
+    (~ exists f, cl f <> None /\ List.In f (map fst pnds)) ->
+    List.NoDup (map fst pnds) ->
     forall f tf,
       List.In (f, tf) pnds ->
       model_member_valid CTbl MTbl mdlnames Cbody clF f tf.
 Proof.
   intros CTbl MTbl mdlnames Cbody pnds.
-  induction pnds as [| pnd pnds' IHpnds'];
-    intros P cl Hsubset. 
-  simpl. intros. contradiction.
-  simpl. destruct pnd as [f' tf'].
-  destruct (fold_left
-                (fun (okAndCl : Prop * id_ty_map) (dt : id * tm) =>
-                 let (ok, cl) := okAndCl in
-                 (let (nm, d) := dt in
-                  model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
-                 let (nm, _) := dt in
-                 match find_ty nm Cbody with
-                 | Some tp => IdLPM.IdMap.add nm tp cl
-                 | None => cl
-                 end)) pnds'
-                (model_member_valid CTbl MTbl mdlnames Cbody cl f' tf' /\ P,
-                match find_ty f' Cbody with
-                | Some tp => IdLPM.IdMap.add f' tp cl
-                | None => cl
-                end)) as [okF clF] eqn:Heq.
-  intros HokF f tf Hin.
+  induction pnds as [| [f' tf'] pnds' IHpnds'];
+    intros P cl okF clF Hsubset Heqfold HokF Hmdlsincl
+           Hpnds Hnodup; simpl.
+  (* pnds = nil *)
+  intros. contradiction.
+  (* pnds = [f' tf'] :: pnds' *)
+  intros f tf Hin.
   destruct Hin as [Hin | Hin].
-  - (* head *)
+  - (* f=tf in head *)
     inversion Hin. subst. clear Hin.
-    assert (HokFeq : fst (
-         fold_left
-          (fun (okAndCl : Prop * id_ty_map) (dt : id * tm) =>
-           let (ok, cl) := okAndCl in
-           (let (nm, d) := dt in
-            model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
-           let (nm, _) := dt in
-           match find_ty nm Cbody with
-           | Some tp => IdLPM.IdMap.add nm tp cl
-           | None => cl
-           end)) pnds'
-          (model_member_valid CTbl MTbl mdlnames Cbody cl f tf /\ P,
-          match find_ty f Cbody with
-          | Some tp => IdLPM.IdMap.add f tp cl
-          | None => cl
-          end)) = okF).
-    { assert (Htriv : fst (okF, clF) = okF) by reflexivity.
-      rewrite -> Heq. assumption. }
-    assert (Hok : fst (
-         fold_left
-          (fun (okAndCl : Prop * id_ty_map) (dt : id * tm) =>
-           let (ok, cl) := okAndCl in
-           (let (nm, d) := dt in
-            model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
-           let (nm, _) := dt in
-           match find_ty nm Cbody with
-           | Some tp => IdLPM.IdMap.add nm tp cl
-           | None => cl
-           end)) pnds'
-          (model_member_valid CTbl MTbl mdlnames Cbody cl f tf /\ P,
-          match find_ty f Cbody with
-          | Some tp => IdLPM.IdMap.add f tp cl
-          | None => cl
-          end))).
-    { rewrite -> HokFeq. assumption. }
-    pose proof (fold_left_members_ok__inital_prop _ _ _ _ _ _ _ 
-                                                  Hok) as HfOk'.
+    simpl in Heqfold.
+    assert (HeqOk : okF = fst (
+          fold_left
+              (fun (okAndCl : Prop * context) (dt : id * tm) =>
+               let (ok, cl) := okAndCl in
+               (let (nm, d) := dt in
+                model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+               let (nm, _) := dt in
+               match find_ty nm Cbody with
+               | Some tp => update cl nm (tmtype tp)
+               | None => cl
+               end)) pnds'
+              (model_member_valid CTbl MTbl mdlnames Cbody cl f tf /\ P,
+              match find_ty f Cbody with
+              | Some tp => update cl f (tmtype tp)
+              | None => cl
+              end))).
+    { rewrite surjective_pairing in Heqfold.
+      inversion Heqfold. reflexivity. }
+    assert (Hok : fst
+            (fold_left
+               (fun (okAndCl : Prop * context) (dt : id * tm) =>
+                let (ok, cl) := okAndCl in
+                (let (nm, d) := dt in
+                 model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+                let (nm, _) := dt in
+                match find_ty nm Cbody with
+                | Some tp => update cl nm (tmtype tp)
+                | None => cl
+                end)) pnds'
+               (model_member_valid CTbl MTbl mdlnames Cbody cl f tf /\ P,
+               match find_ty f Cbody with
+               | Some tp => update cl f (tmtype tp)
+               | None => cl
+               end))).
+    { subst. assumption. }
+    pose proof (fold_left_members_ok__inital_prop 
+                  _ _ _ _ _ _ _ Hok) as HfOk'. 
+    clear Hok. clear HeqOk.
     destruct HfOk' as [HfOk' _].
-
+    (* model_member_valid *)
     unfold model_member_valid.
     unfold model_member_valid in HfOk'.
     destruct HfOk' as [Tf [Hfindf [Hcvarstf Hhas_type]]].
     exists Tf. repeat (split; try assumption).
     (* try to prove that for bigger context it's still Ok *)
-    apply context_weakening 
-    with (Gamma := 
-            IdLPM.IdMap.fold
-              (fun (nm : IdLPM.IdMap.key) (tp : ty)
-                   (G : partial_map ctxvarty) => update G nm (tmtype tp)) 
-              cl ctxempty).
+    apply context_weakening with (Gamma := cl).
     + assumption.
     + (* no model names as bound cvars *)
       unfold no_bound_cvar_names_in_term in Hcvarstf.
@@ -1908,40 +1679,391 @@ Proof.
       assumption. assumption.
     + (* clF preserves cl *)
       intros x Hxin.
-      
-(*
+      pose proof (fold_left_members_ok__last_cl_includes_cl 
+                    CTbl MTbl mdlnames Cbody)
+        as Htyping.
+      specialize (Htyping pnds' _ _ _ _ Heqfold HokF).
+      (* cl good *)
+      assert (Hcl : ~
+                      (exists f0 : id,
+                          match find_ty f Cbody with
+                          | Some tp => update cl f (tmtype tp)
+                          | None => cl
+                          end f0 <> None /\ In f0 (map fst pnds'))).
+      { intros [f0 [Hf0 Hf0in]].
+        destruct (find_ty f Cbody) eqn:Heqfind.
+        * (* upd cl *)
+          destruct (beq_idP f f0) as [Hff0 | Hff0].
+          ** subst. inversion Hnodup.
+             subst. apply H1 in Hf0in. contradiction.
+          ** apply Hpnds.
+             rewrite update_neq in Hf0; try assumption.
+             exists f0. split. assumption.
+             simpl. right. assumption.
+        * apply Hpnds.
+          exists f0. split. assumption.
+          simpl. right. assumption. }
+      specialize (Htyping Hcl). clear Hcl.
+      inversion Hnodup; subst.
+      specialize (Htyping H2).
+      destruct (cl x) eqn:Heqclx.
+      * apply Htyping.
+        destruct (find_ty f Cbody) eqn:Heqfind.
+        ** destruct (beq_idP f x) as [Hfx | Hfx].
+           ++ subst.
+              exfalso. apply Hpnds.
+              exists x. split. rewrite Heqclx. assumption.
+              simpl. left. reflexivity.
+           ++ rewrite update_neq; assumption.
+        ** assumption.
+      * assert (Hrefl : @None ctxvarty = None) by reflexivity.
+        apply Hxin in Hrefl. contradiction.
+    + (* no model names as cvars clF *)
+      apply fold_left_members_ok__no_model_names_in_last_cl
+      with CTbl mdlnames Cbody ((f, tf) :: pnds')
+           P cl okF;
+        try assumption.
+  - (* f=tf in pnds' *)
+    simpl in Heqfold.
+    apply IHpnds' 
+    with (model_member_valid CTbl MTbl mdlnames Cbody cl f' tf' /\ P)
+         (match find_ty f' Cbody with
+          | Some tp => update cl f' (tmtype tp)
+          | None => cl
+          end)
+         okF; try assumption.
+    + (* no model names *)
+      destruct (find_ty f' Cbody) eqn:Heqfind.
+      * unfold no_model_names_as_cvars_in_Gamma.
+        intros M [[C HfindM] HinMT].
+        destruct (beq_idP f' M) as [Hf'M | Hf'M].
+        ** subst. rewrite update_eq in HfindM.
+           inversion HfindM.
+        ** rewrite update_neq in HfindM.
+           unfold no_model_names_as_cvars_in_Gamma in Hmdlsincl.
+           specialize (Hmdlsincl M). apply Hmdlsincl.
+           split. eexists; eassumption. assumption. assumption.
+      * assumption.
+    + (* f0 ok *)
+      intros [f0 [Hf0cl Hf0pnds]].
+      destruct (find_ty f') eqn:Heqfind.
+      * destruct (beq_idP f' f0) as [Hf'f0 | Hf'f0].
+        ** subst.
+           inversion Hnodup; subst. 
+           apply H1 in Hf0pnds. contradiction.
+        ** rewrite update_neq in Hf0cl; try assumption.
+           apply Hpnds. exists f0. split.
+           assumption. simpl. right. assumption.
+      * apply Hpnds. exists f0. split.
+        assumption. simpl. right. assumption.
+    + inversion Hnodup; subst. assumption.
+Qed.
 
-  specialize (IHpnds'
-                (model_member_valid CTbl MTbl mdlnames Cbody cl f' tf' /\ P)
-                (match find_ty f' Cbody with
-                 | Some tp => IdLPM.IdMap.add f' tp cl
-                 | None => cl
-                 end)
-             Hsubset).
-  
-  rewrite Heq in IHpnds'.
-  intros okF.
-
-HokF. f tf Hin.
-*)
-Abort.
-
-
-Lemma abc :
-  forall CTbl MTbl mdlnames M C Mbody' Mbody,
-    model_has_type CTbl MTbl mdlnames (mdl_def M C Mbody') (MTdef C Mbody) ->
+Lemma fold_left_members_ok__ok_in_last_cl :
+  forall CTbl MTbl mdlnames Cbody pnds okF clF,
     IdLS.IdSet.Subset (set_of_keys MTbl) mdlnames ->
-    IdLS.IdSet.In M mdlnames ->
-    forall f tf, List.In (nm_def f tf) Mbody' ->
-    ~ IdLPM.IdMap.In M MTbl ->
-    exists Cbody Tf,
-      IdLPM.IdMap.find C CTbl = Some (CTdef Cbody)
-      /\ IdLPM.IdMap.find f Cbody = Some Tf
-      /\ let MTbl' := IdLPM.IdMap.add M (MTdef C Mbody) MTbl in
-         CTbl $ MTbl' ; ctxempty |- (qualify_model_members M Mbody tf) \in Tf.
+    (okF, clF) 
+    = (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
+            let (ok, cl) := okAndCl in
+            (let (nm, d) := dt in
+             model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+             let (nm, _) := dt in
+             match find_ty nm Cbody with
+             | Some tp => update cl nm (tmtype tp)
+             | None => cl
+             end))
+         pnds
+         (True, ctxempty)) ->
+    okF ->
+    List.NoDup (map fst pnds) ->
+    forall f tf,
+      List.In (f, tf) pnds ->
+      model_member_valid CTbl MTbl mdlnames Cbody clF f tf.
+Proof.
+  intros CTbl MTbl mdlnames Cbody pnds okF clF.
+  intros Hsubset Heqfold HokF Hnodup.
+  intros f tf Hin.
+  apply fold_left_members_ok__ok_in_last_cl' 
+  with pnds True ctxempty okF; try assumption.
+  (* ctxempty is good *)
+  - unfold no_model_names_as_cvars_in_Gamma.
+    intros M [[C contra] _]. 
+    unfold ctxempty in contra. rewrite apply_empty in contra.
+    inversion contra.
+  (* ctxempty ok *)
+  - intros [f0 [contra _]]. unfold ctxempty in contra.
+    rewrite apply_empty in contra. tauto.
+Qed.
+
+Lemma fold_left_members_ok__last_Gamma_only_from_tmtypes' :
+  forall CTbl MTbl mdlnames Cbody pnds P cl okF clF names,
+    (okF, clF) 
+    = (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
+            let (ok, cl) := okAndCl in
+            (let (nm, d) := dt in
+             model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+             let (nm, _) := dt in
+             match find_ty nm Cbody with
+             | Some tp => update cl nm (tmtype tp)
+             | None => cl
+             end))
+         pnds
+         (P, cl)) ->
+    okF ->
+    (forall x, List.In x (map fst pnds) -> List.In x names) ->
+    (forall x, 
+      cl x <> None ->
+      exists Tx, cl x = Some (tmtype Tx)
+                 /\ List.In x names
+                 /\ find_ty x Cbody = Some Tx) ->
+    forall x, 
+      clF x <> None ->
+      exists Tx, clF x = Some (tmtype Tx)
+                 /\ List.In x names
+                 /\ find_ty x Cbody = Some Tx.
+Proof.
+  intros CTbl MTbl mdlnames Cbody pnds.
+  induction pnds as [| [f' tf'] pnds' IHpnds'];
+    intros P cl okF clF names Heqfold HokF Hnames HclOk; simpl.
+  (* pnds = nil *)
+  simpl in Heqfold. inversion Heqfold. subst.
+  assumption.
+  (* pnds = [f' tf'] pnds' *)
+  simpl in Heqfold.
+  specialize 
+    (IHpnds' 
+       (model_member_valid CTbl MTbl mdlnames Cbody cl f' tf' /\ P)
+       (match find_ty f' Cbody with
+        | Some tp => update cl f' (tmtype tp)
+        | None => cl
+        end)
+       okF clF names Heqfold HokF).
+  simpl in HclOk. 
+  assert (Hnames' : forall x : id, In x (map fst pnds') -> In x names).
+  { intros x Hxin. apply Hnames.
+    simpl. right. assumption. }
+  specialize (IHpnds' Hnames').
+  apply IHpnds'.
+  intros z Hnone.
+  destruct (find_ty f' Cbody) eqn:Heqfind.
+  + destruct (beq_idP f' z) as [Hf'z | Hf'z].
+    * subst. exists t. split.
+      rewrite update_eq. reflexivity.
+      specialize (Hnames z). split; try assumption. 
+      apply Hnames. simpl. left. reflexivity.
+    * rewrite update_neq.
+      rewrite update_neq in Hnone; try assumption.
+      specialize (HclOk z Hnone). assumption. assumption.
+  + specialize (HclOk z Hnone). assumption. 
+Qed.
+
+Lemma fold_left_members_ok__last_Gamma_only_from_tmtypes :
+  forall CTbl MTbl mdlnames Cbody pnds okF clF,
+    (okF, clF) 
+    = (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
+            let (ok, cl) := okAndCl in
+            (let (nm, d) := dt in
+             model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+             let (nm, _) := dt in
+             match find_ty nm Cbody with
+             | Some tp => update cl nm (tmtype tp)
+             | None => cl
+             end))
+         pnds
+         (True, ctxempty)) ->
+    okF ->
+    forall x, 
+      clF x <> None ->
+      exists Tx, clF x = Some (tmtype Tx)
+                 /\ List.In x (map fst pnds)
+                 /\ find_ty x Cbody = Some Tx.
+Proof.
+  intros. 
+  apply fold_left_members_ok__last_Gamma_only_from_tmtypes'
+  with CTbl MTbl mdlnames pnds True ctxempty okF;
+    try assumption.
+  - intros z Hz. assumption.
+  - intros z contra. unfold ctxempty in contra.
+    rewrite apply_empty in contra. tauto.
+Qed.
+
+
+(* %%% *)
+Lemma qualify_model_members_preserves_typing_for_good_Gamma :
+  forall (CTbl : cptcontext) (MTbl : mdlcontext)
+         (Gamma : context) (tf : tm) (Tf : ty)
+         (C : id) Cbody M Mbody,
+    (* [tf] has type [Tf] *)
+    CTbl $ MTbl ; Gamma |- tf \in Tf ->
+    (* term does not contain concept vars named as model names *)
+    no_model_names_as_bound_cvars_in_term MTbl tf ->
+    (* we work with a valid concept *)
+    IdLPM.IdMap.find C CTbl = Some (CTdef Cbody) ->
+    (* all names in Gamma are to be qualified *)
+    (forall x, Gamma x <> None ->
+               exists Tx, Gamma x = Some (tmtype Tx)
+                          /\ IdLPM.IdMap.In x Mbody) ->
+    (* names we qualify appear in concept and consistent with Gamma *)
+    (forall x, 
+        IdLPM.IdMap.In x Mbody -> 
+        exists Tx, 
+          IdLPM.IdMap.find x Cbody = Some Tx
+          /\ (Gamma x <> None -> Gamma x = Some (tmtype Tx))) ->
+    IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
+    let tf'   := qualify_model_members M Mbody tf in 
+    CTbl $ MTbl ; ctxempty |- tf' \in Tf.
+Proof.
+  intros CTbl MTbl Gamma tf Tf C Cbody M Mbody.
+  intros HT HMTtf HfindC HGamma Hmems (*Hnin HMnin*) HMfind.
+  unfold qualify_model_members.
+  apply qualify_model_members'_preserves_typing_for_good_Gamma
+  with Gamma C Cbody Mbody; try assumption.
+  - (* Gamma is good *)
+    intros x Hnone.
+    specialize (HGamma x Hnone).
+    destruct HGamma as [Tx [HeqGamma Hxin]].
+    exists Tx. split; try assumption.
+    apply in_map__in_set_of_keys; assumption.
+  - (* Cbody *)
+    intros x HinMbody. 
+    apply in_set_of_keys__in_map in HinMbody.
+    specialize (Hmems x HinMbody). assumption.
+Qed.
+
+
+Lemma value_in_fst__pair_in_list:
+  forall (X Y : Type) (x : X) (ps : list (X * Y)),
+    In x (map fst ps) -> 
+    exists (y : Y), In (x, y) ps.
+Proof.
+  intros X Y x ps. induction ps as [| [x' y'] ps' IHps'].
+  - intros. inversion H.
+  - intros H. simpl in H. destruct H as [H | H].
+    + subst. simpl.
+      exists y'. left. reflexivity.
+    + apply IHps' in H. destruct H as [y H].
+      exists y. simpl. right. assumption.
+Qed.
+
+Lemma in_list__in_map_namedef_to_pair :
+  forall nds f tf,
+    List.In (nm_def f tf) nds ->
+    In (f, tf) (map namedef_to_pair nds).
+Proof.
+  intros nds. induction nds as [| [n d] nds' IHnds'].
+  - intros. inversion H.
+  - intros f tf Hin. simpl in *.
+    destruct Hin as [Hin | Hin].
+    + inversion Hin. subst.
+      left. reflexivity.
+    + right. apply IHnds'. assumption.
+Qed.
+
+
+Lemma qualify_model_members_preserves_typing_in_empty_context:
+  forall CTbl MTbl mdlnames Cbody pnds okF clF C Mbody M,
+    IdLS.IdSet.Subset (set_of_keys MTbl) mdlnames ->
+    (okF, clF) 
+    = (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
+            let (ok, cl) := okAndCl in
+            (let (nm, d) := dt in
+             model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+             let (nm, _) := dt in
+             match find_ty nm Cbody with
+             | Some tp => update cl nm (tmtype tp)
+             | None => cl
+             end))
+         pnds
+         (True, ctxempty)) ->
+    okF ->
+    List.NoDup (map fst pnds) ->
+    IdLPM.IdMap.find C CTbl = Some (CTdef Cbody) ->
+    IdLPM.eq_list_map pnds Mbody ->
+    IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
+    forall f tf,
+      List.In (f, tf) pnds ->
+      exists Tf,
+        find_ty f Cbody = Some Tf
+        /\
+        CTbl $ MTbl ; ctxempty |- (qualify_model_members M Mbody tf) \in Tf.
+Proof.
+  intros CTbl MTbl mdlnames Cbody pnds okF clF C Mbody M.
+  intros Hsubset Heqfold HokF Hnodup HfindC HMbody (*HMinMdls HMinMT*) HfindM.
+  pose proof (fold_left_members_ok__ok_in_last_cl) as HtfOkinclF.
+  specialize (HtfOkinclF CTbl MTbl mdlnames Cbody pnds okF clF).
+  specialize (HtfOkinclF Hsubset Heqfold HokF Hnodup).
+  (* go to concrete member of pnds *)
+  intros f tf Htfin.
+  pose proof (HtfOkinclF f tf Htfin) as Hfvalid.
+  unfold model_member_valid in Hfvalid.
+  destruct Hfvalid as [Tf [Hffind [Htfvars HTtf]]].
+  exists Tf. split. assumption. 
+  (* qualify_model_members typing *)
+  pose proof (qualify_model_members_preserves_typing_for_good_Gamma)
+       as HTQMMtf.
+  specialize (HTQMMtf CTbl MTbl clF tf Tf).
+  specialize (HTQMMtf C Cbody M Mbody).
+  specialize (HTQMMtf HTtf).
+  apply HTQMMtf; try assumption;
+    pose proof (fold_left_members_ok__last_Gamma_only_from_tmtypes)
+    as HclFOk;
+    specialize (HclFOk CTbl MTbl mdlnames Cbody pnds okF clF);
+    specialize (HclFOk Heqfold HokF).
+  - (* no_model_names_as_bound_cvars_in_term MTbl tf *)
+    unfold no_model_names_as_bound_cvars_in_term.
+    intros [M0 [HM0tf HM0MT]].
+    unfold no_bound_cvar_names_in_term in Htfvars.
+    specialize (Htfvars M0). unfold IdLS.IdSet.Subset in Hsubset.
+    apply in_map__in_set_of_keys in HM0MT. specialize (Hsubset M0 HM0MT).
+    specialize (Htfvars Hsubset). apply Htfvars.
+    assumption.
+  - (* all x in clF are good *)
+    intros z Hnone. specialize (HclFOk z Hnone).
+    destruct HclFOk as [Tz [HclFz [Hinz Hfind]]].
+    exists Tz. split. assumption.
+    unfold IdLPM.eq_list_map in HMbody.
+    destruct HMbody as [_ [_ HMbodyforall]].
+    rewrite Forall_forall in HMbodyforall.
+    apply value_in_fst__pair_in_list in Hinz.
+    destruct Hinz as [tz Hinz].
+    specialize (HMbodyforall (z, tz) Hinz).
+    simpl in HMbodyforall. unfold IdLPM.IdMap.In.
+    exists tz. apply IdMapProps.F.find_mapsto_iff; assumption.
+  - (* type in concept and clF consistent *)
+    intros x Hxin. unfold IdLPM.IdMap.In in Hxin.
+    destruct Hxin as [tx Htx].
+    pose proof (IdLPM.Props.eq_list_map__iff _ _ _  HMbody x tx) as Htx'.
+    rewrite <- Htx' in Htx.
+    specialize (HtfOkinclF x tx Htx).
+    unfold model_member_valid in HtfOkinclF.
+    destruct HtfOkinclF as [Tx [Hfindx [HtxOk HTtx]]].
+    exists Tx. split. assumption.
+    intros HclF. specialize (HclFOk x HclF).
+    destruct HclFOk as [Tx' [HTx' [Hin Hfind']]].
+    rewrite Hfindx in Hfind'. inversion Hfind'. subst. clear Hfind'.
+    assumption.
+Qed.
+
+
+Theorem model_welldefined__QMMs_have_types:
+  forall CTbl MTbl mdlnames M C Mbody' Mbody,
+    model_welldefined CTbl MTbl mdlnames (mdl_def M C Mbody') ->
+    IdLPM.eq_list_map (map namedef_to_pair Mbody') Mbody ->
+    IdLS.IdSet.Subset (set_of_keys MTbl) mdlnames ->
+    IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
+    forall f tf, 
+      List.In (nm_def f tf) Mbody' ->
+      exists Cbody Tf,
+        IdLPM.IdMap.find C CTbl = Some (CTdef Cbody)
+        /\ IdLPM.IdMap.find f Cbody = Some Tf
+        /\ (*let MTbl' := IdLPM.IdMap.add M (MTdef C Mbody) MTbl in*)
+           CTbl $ MTbl ; ctxempty |- (qualify_model_members M Mbody tf) \in Tf.
 Proof.
   intros CTbl MTbl mdlnames M C Mbody'.
-  unfold model_has_type.
   unfold model_welldefined.
     unfold MMdlMem_SinglePassImplMDefs.module_ok,
     MMdlMem_SinglePassImplMDefs.HelperD.MGM.module_ok,
@@ -1959,102 +2081,237 @@ Proof.
     MMdlMem_SinglePassImplMBase.members_to_define,
     MMdlMem_SinglePassImplMBase.id, MMdlMem_SinglePassImplMBase.MId.id,
     MMdlMem_SinglePassImplMDefs.HelperD.dt, MMdlMem_SinglePassImplMBase.MD.t.
-  induction Mbody' as [| nmdef nmdefs' IHnmdefs'].
-  - (* Mbody' = nil *)
-    simpl. intros. contradiction.
-  - (* Mbody' = nmdef :: nmdefs' *)
-    simpl. 
-    intros Mbody [[Cbody HCbody] HeqMbody] Hsubset HM f tf Hnmdef.
-    intros HMinMT.
+    intros Mbody [Cbody HCbody] HeqMbody 
+           Hsubset HfindM (*HMinMT HM*) f tf Hnmdef.
     destruct HCbody as [HfindC Hmdl].
     destruct Hmdl as [[Hnodup HmdlOk] HCforall].
-    destruct nmdef as [f' tf']. simpl in *.
-    pose proof (fold_left_members_ok__inital_prop _ _ _ _ _ _ _ 
-                                                  HmdlOk) as Hf'Ok.
-    destruct Hf'Ok as [Hf'Ok _].
-    destruct Hnmdef as [Hnmdef | Hnmdef].
-    + (* head nmdef *)
-      exists Cbody.
-      inversion Hnmdef. subst. clear Hnmdef.
-      unfold model_member_valid in Hf'Ok.
-      destruct Hf'Ok as [Tf [Hfindf [Hnocvars HTtf]]].
-      unfold ctxempty in HTtf. 
-      compute in HTtf. 
-      replace (fun _ : id => None) with ctxempty in HTtf.
-      exists Tf. split.
-      assumption. split. assumption.
-      assert (Heqtf : tf = qualify_model_members M Mbody tf).
-      { unfold qualify_model_members.
-        apply qualify_model_members'_preserves_term_in_empty
-          with CTbl MTbl Tf; try assumption;
-          unfold no_bound_cvar_names_in_term in Hnocvars.
-        (* part 1 *)
-        unfold no_model_names_as_bound_cvars_in_term.
-        intros contra. destruct contra as [M' [HM'tf HM']].
-        unfold IdLS.IdSet.Subset in Hsubset.
-        pose proof (in_map__in_set_of_keys _ _ _ HM') as HM'in.
-        specialize (Hsubset M' HM'in).
-        specialize (Hnocvars M' Hsubset).
-        apply Hnocvars. assumption.
-        (* part 2 *)
-        intros contra.
-        specialize (Hnocvars M HM).
-        apply Hnocvars. assumption. }
-      rewrite <- Heqtf; try reflexivity.
-      apply mdlcontext_weakening with MTbl;
-        try (assumption || reflexivity).
-      intros M' C' M'body HfindM'.
-      exists M'body. split.
-      rewrite IdMapProps.F.add_neq_o; try assumption.
-      (* M <> M' *)
-      intros contra. unfold IdUOTOrig.eq in contra. subst M.
-      apply IdMapProps.F.not_find_in_iff in HMinMT.
-      rewrite HfindM' in HMinMT. inversion HMinMT. reflexivity.
-      reflexivity.
-    + (* inductive case *)
-      apply IHnmdefs'; try assumption.
-      split.
-      exists Cbody. repeat (split; try assumption).
-      inversion Hnodup; subst. assumption.
+  remember (fold_left
+                (fun (okAndCl : Prop * context) (dt : id * tm) =>
+                 let (ok, cl) := okAndCl in
+                 (let (nm, d) := dt in
+                  model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+                 let (nm, _) := dt in
+                 match find_ty nm Cbody with
+                 | Some tp => update cl nm (tmtype tp)
+                 | None => cl
+                 end)) (map namedef_to_pair Mbody') (True, ctxempty))
+      as memsok.
+  destruct memsok as [okF clF].
+  remember (fst
+             (fold_left
+                (fun (okAndCl : Prop * context) (dt : id * tm) =>
+                 let (ok, cl) := okAndCl in
+                 (let (nm, d) := dt in
+                  model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+                 let (nm, _) := dt in
+                 match find_ty nm Cbody with
+                 | Some tp => update cl nm (tmtype tp)
+                 | None => cl
+                 end)) (map namedef_to_pair Mbody') (True, ctxempty)))
+    as okF'.
+  assert (okF' = okF) as HeqokF.
+  { rewrite surjective_pairing in Heqmemsok.
+    inversion Heqmemsok. subst. reflexivity. }
+  assert (HokF : okF').
+  { subst. assumption. }
+  rewrite -> HeqokF in HokF.
+  pose proof (qualify_model_members_preserves_typing_in_empty_context)
+      as HQMMtf.
+  specialize (HQMMtf CTbl MTbl mdlnames Cbody 
+                     (map namedef_to_pair Mbody') okF clF 
+                     C Mbody M).
+  specialize (HQMMtf Hsubset Heqmemsok HokF Hnodup).
+  specialize (HQMMtf HfindC HeqMbody (*HMinMT*) HfindM).
+  apply in_list__in_map_namedef_to_pair in Hnmdef.
+  specialize (HQMMtf f tf Hnmdef).
+  destruct HQMMtf as [Tf [Hfindf HTtf]].
+  simpl in HTtf.
+  exists Cbody Tf. repeat (split; try assumption).
+Qed.
 
-      remember (IdLPM.map_from_list (map namedef_to_pair nmdefs'))
-        as Mbody'.
-      specialize (IHnmdefs' Mbody').
-      assert (Hprem : 
-                exists fnmtys : id_ty_map,
-                 IdLPM.IdMap.find C CTbl = Some (CTdef fnmtys) /\
-                 (NoDup (map fst (map namedef_to_pair nmdefs')) /\
-                  fst
-                    (fold_left
-                       (fun (okAndCl : Prop * id_ty_map) (dt : id * tm) =>
-                        let (ok, cl) := okAndCl in
-                        (let (nm, d) := dt in
-                         model_member_valid CTbl MTbl mdlnames fnmtys cl nm d /\ ok,
-                        let (nm, _) := dt in
-                        match find_ty nm fnmtys with
-                        | Some tp => IdLPM.IdMap.add nm tp cl
-                        | None => cl
-                        end)) (map namedef_to_pair nmdefs')
-                       (True, IdLPM.IdMap.empty ty))) /\
-                 Forall
-                   (fun nm : id => In nm (map fst (map namedef_to_pair nmdefs')))
-                   (map fst (IdLPM.IdMap.elements fnmtys))).
-      { exists Cbody.
-        repeat (split; try assumption).
-        inversion Hnodup; subst. assumption.
-(*    
-    apply IHnmdefs'; try assumption.
 
-      simpl in HeqMbody.
-      unfold IdLPM.eq_list_map in HeqMbody.
-      destruct HeqMbody as [_ [_ Hforall]].
-      rewrite Forall_forall in Hforall.
-      specialize (Hforall (f, tf)). simpl in Hforall.
-      assert (Hfin : (f, tf) = (f, tf) 
-                     \/ In (f, tf) (map namedef_to_pair nmdefs'))
-        by (left; reflexivity).
-      specialize (Hforall Hfin).
-      IdLPM.Props .Helper
+Lemma model_members_ok__mdlcontext_weakening' :
+  forall CTbl MTbl MTbl' mdlnames Cbody pnds (P P' : Prop) cl,
+    fst
+      (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
+            let (ok, cl) := okAndCl in
+            (let (nm, d) := dt in
+             model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+             let (nm, _) := dt in
+             match find_ty nm Cbody with
+             | Some tp => update cl nm (tmtype tp)
+             | None => cl
+             end)) 
+         pnds (P, cl)) ->
+    IdLS.IdSet.Subset (set_of_keys MTbl) mdlnames ->
+    IdLS.IdSet.Subset (set_of_keys MTbl') mdlnames ->
+    (forall (M' : IdLPM.IdMap.key) (C' : id) (mdl : id_tm_map),
+        IdLPM.IdMap.find M' MTbl = Some (MTdef C' mdl) ->
+        exists mdl' : id_tm_map,
+          IdLPM.IdMap.find M' MTbl' = Some (MTdef C' mdl') /\
+          IdLPM.IdMap.Equal mdl mdl') ->
+    (P -> P') ->
+    fst
+      (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
+            let (ok, cl) := okAndCl in
+            (let (nm, d) := dt in
+             model_member_valid CTbl MTbl' mdlnames Cbody cl nm d /\ ok,
+             let (nm, _) := dt in
+             match find_ty nm Cbody with
+             | Some tp => update cl nm (tmtype tp)
+             | None => cl
+             end)) 
+         pnds (P', cl)).
+Proof.
+  intros CTbl MTbl MTbl' mdlnames Cbody pnds.
+  induction pnds as [| [f tf] pnds' IHpnds'].
+  (* pnds = nil *)
+  intros. simpl in *. apply H3. assumption.
+  (* pnds = (f, tf) :: pnds' *)
+  intros P P' cl Hfold Hsubset Hsubset' HMTbl' HPP'.
+  simpl. simpl in Hfold.
+  specialize (IHpnds' 
+                (model_member_valid CTbl MTbl mdlnames Cbody cl f tf /\ P)
+                (model_member_valid CTbl MTbl' mdlnames Cbody cl f tf /\ P')
+                (match find_ty f Cbody with
+                 | Some tp => update cl f (tmtype tp)
+                 | None => cl
+                 end)).
+  apply IHpnds'; try assumption.
+  unfold model_member_valid.
+  intros [[T [Hfind [Hcvars HT]]] HP].
+  split.
+  - exists T. repeat (split; try assumption).
+    apply mdlcontext_weakening with MTbl; assumption.
+  - apply HPP'; assumption.
+Qed.
+
+Lemma model_members_ok__mdlcontext_weakening :
+  forall CTbl MTbl MTbl' mdlnames Cbody pnds,
+    fst
+      (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
+            let (ok, cl) := okAndCl in
+            (let (nm, d) := dt in
+             model_member_valid CTbl MTbl mdlnames Cbody cl nm d /\ ok,
+             let (nm, _) := dt in
+             match find_ty nm Cbody with
+             | Some tp => update cl nm (tmtype tp)
+             | None => cl
+             end)) 
+         pnds (True, ctxempty)) ->
+    IdLS.IdSet.Subset (set_of_keys MTbl) mdlnames ->
+    IdLS.IdSet.Subset (set_of_keys MTbl') mdlnames ->
+    (forall (M' : IdLPM.IdMap.key) (C' : id) (mdl : id_tm_map),
+        IdLPM.IdMap.find M' MTbl = Some (MTdef C' mdl) ->
+        exists mdl' : id_tm_map,
+          IdLPM.IdMap.find M' MTbl' = Some (MTdef C' mdl') /\
+          IdLPM.IdMap.Equal mdl mdl') ->
+    fst
+      (fold_left
+         (fun (okAndCl : Prop * context) (dt : id * tm) =>
+            let (ok, cl) := okAndCl in
+            (let (nm, d) := dt in
+             model_member_valid CTbl MTbl' mdlnames Cbody cl nm d /\ ok,
+             let (nm, _) := dt in
+             match find_ty nm Cbody with
+             | Some tp => update cl nm (tmtype tp)
+             | None => cl
+             end)) 
+         pnds (True, ctxempty)).
+Proof.
+  intros CTbl MTbl MTbl' mdlnames Cbody pnds.
+  intros Hfold Hsubset Hsubset' HMTbl'.
+  apply model_members_ok__mdlcontext_weakening' with MTbl True;
+    try assumption. tauto.
+Qed.
+
+Lemma model_welldefined__mdlcontext_weakening :
+  forall CTbl MTbl MTbl' mdlnames M C Mbody' Mbody,
+    model_welldefined CTbl MTbl mdlnames (mdl_def M C Mbody') ->
+    IdLPM.eq_list_map (map namedef_to_pair Mbody') Mbody ->
+    IdLS.IdSet.Subset (set_of_keys MTbl) mdlnames ->
+    IdLS.IdSet.Subset (set_of_keys MTbl') mdlnames ->
+    (forall (M' : IdLPM.IdMap.key) (C' : id) (mdl : id_tm_map),
+        IdLPM.IdMap.find M' MTbl = Some (MTdef C' mdl) ->
+        exists mdl' : id_tm_map,
+          IdLPM.IdMap.find M' MTbl' = Some (MTdef C' mdl') /\
+          IdLPM.IdMap.Equal mdl mdl') ->
+    model_welldefined CTbl MTbl' mdlnames (mdl_def M C Mbody').
+Proof.
+  intros CTbl MTbl MTbl' mdlnames M C Mbody'.
+  unfold model_welldefined.
+    unfold MMdlMem_SinglePassImplMDefs.module_ok,
+    MMdlMem_SinglePassImplMDefs.HelperD.MGM.module_ok,
+    MMdlMem_SinglePassImplMDefs.HelperD.members_ok,
+    MMdlMem_SinglePassImplMDefs.HelperD.MSP.members_ok,
+    MMdlMem_SinglePassImplMDefs.HelperD.MSP.members_ok',
+    MMdlMem_SinglePassImplMDefs.HelperD.MSP.process_dep_member,
+    MMdlMem_SinglePassImplMBase.MD.ctxloc,
+    MMdlMem_SinglePassImplMDefs.HelperD.update_prop,
+    MMdlMem_DataLCIOkDef.is_ok,
+    MMdlMem_SinglePassImplMDefs.HelperD.update_ctxloc,
+    MMdlMem_SinglePassImplMBase.upd_ctxloc,
+    MMdlMem_SinglePassImplMBase.ctxl_init,
+    MMdlMem_SinglePassImplMDefs.HelperD.req_members_defined,
+    MMdlMem_SinglePassImplMBase.members_to_define,
+    MMdlMem_SinglePassImplMBase.id, MMdlMem_SinglePassImplMBase.MId.id,
+    MMdlMem_SinglePassImplMDefs.HelperD.dt, MMdlMem_SinglePassImplMBase.MD.t.
+    intros Mbody [Cbody HCbody] HeqMbody 
+           Hsubset Hsubset' HMTbl'.
+    destruct HCbody as [HfindC Hmdl].
+    destruct Hmdl as [[Hnodup HmdlOk] HCforall].
+    exists Cbody; repeat split; try assumption.
+    apply model_members_ok__mdlcontext_weakening with MTbl;
+      try assumption.
+Qed.
+
+
+(* %%%%% *)
+
+Theorem qualify_model_members_preserves_typing :
+  forall CTbl MTbl M C Mbody f Tf tf,
+    mdlcontext_welldefined CTbl MTbl ->
+    IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
+    CTbl $ MTbl; ctxempty |- tcinvk M f \in Tf ->
+    find_tm f Mbody = Some tf ->                                       
+    CTbl $ MTbl; ctxempty |- qualify_model_members M Mbody tf \in Tf.
+Proof.
+  intros CTbl MTbl M C Mbody f Tf tf.
+  unfold mdlcontext_welldefined.
+  intros [MSec [HMSecOk HMSecMTbl]].
+  unfold modelsec_welldefined in HMSecOk.
+  unfold MMdlDef_SinglePassMDefs.module_ok,
+    MMdlDef_SinglePassMDefs.HelperD.MGM.module_ok,
+    MMdlDef_SinglePassMDefs.HelperD.members_ok,
+    MMdlDef_SinglePassMDefs.HelperD.MSP.members_ok,
+    MMdlDef_SinglePassMDefs.HelperD.MSP.members_ok',
+    MMdlDef_SinglePassMDefs.HelperD.MSP.process_dep_member,
+    MMdlDef_SinglePassMDefs.HelperD.update_prop, 
+    MMdlDef_SinglePassMDefs.HelperD.update_ctxloc,
+    MMdlDef_SinglePassMBase.upd_ctxloc,
+    MMdlDef_DataLCOkDef.is_ok,
+    MMdlDef_SinglePassMBase.ctxl_init,
+    MMdlDef_SinglePassMBase.MD.ctxloc,
+    MMdlDef_SinglePassMBase.id,
+    MMdlDef_SinglePassMBase.MId.id,
+    MMdlDef_SinglePassMDefs.HelperD.dt,
+    MMdlDef_SinglePassMBase.MD.t
+    in HMSecOk.
+  destruct HMSecOk as [HMSecnodup HMSecOk].
+  intros HfindM HTMf Hfindf.
+  (* typing of QMM *)
+  pose proof (model_welldefined__QMMs_have_types) as HTQMMtf.
+  remember (IdLPM.map_from_list (map modeldef_to_pair_id_mty MSec)) as MSecMap.
+  specialize (HTQMMtf CTbl MTbl (model_names MTbl) M C).
+  assert (HfindM' : IdLPM.IdMap.find M MSecMap = Some (MTdef C Mbody)).
+  { unfold IdLPM.IdMap.Equal in HMSecMTbl.
+    specialize (HMSecMTbl M). rewrite -> HMSecMTbl in HfindM. assumption. }
+
+(*
+  specialize (HTQMMtf MSec Mbody).
 *)
 Abort.
 
@@ -2118,22 +2375,6 @@ Section HelperProgress.
 End HelperProgress.
 
 
-(*
-Lemma abc' :
-  forall CTbl MTbl M C,
-    model_welldefined CTbl MTbl M ->
-    forall (nm : id),
-      IdLPM.IdMap.find nm CTbl = Some
-
-Lemma abc :
-  forall CTbl MTbl,
-    cptcontext_welldefined CTbl ->
-    mdlcontext_welldefined CTbl MTbl ->
-    forall (nm : id),
-      IdLPM.IdMap.find nm CTbl = Some
-*)
-
-
 Theorem mdlcontext_WD__name_definition_exists :
   forall CTbl MTbl,
     cptcontext_welldefined CTbl ->
@@ -2174,6 +2415,8 @@ Ltac progress_bin_op_nat :=
          | make_substep ]
   end.
 
+(** This the main [progress] theorem. *)
+
 Theorem progress : forall CTbl MTbl t T,
      CTbl $ MTbl ; ctxempty ||- t \in T ->
      value t \/ exists t', CTbl $ MTbl ; t #==> t'.
@@ -2186,7 +2429,6 @@ Proof.
   unfold has_type_WD in HT.
   destruct HT as [HCTOk [HMTOk HT]].
   induction HT; subst Gamma; eauto;
-    
     (* for binary nat ops *)
     try solve [progress_bin_op_nat].
 (* tvar *)
@@ -2315,31 +2557,97 @@ Qed.
 (** **** Aux defs and proofs *)
 (* ----------------------------------------------------------------- *)
 
-
-
-
-(* 
-
-  forall (CTbl : cptcontext) (MTbl : mdlcontext)
-         (Gamma : context) (tf : tm) (Tf : ty),
-    (* [tf] has type [Tf] *)
-    CTbl $ MTbl ; Gamma |- tf \in Tf ->
-    (* Gamma only contains term variables *)
-    Gamma_of_tmtypes Gamma ->             
-    forall C Cbody,
-    (* we consider a concept consistent with Gamma *)
-      IdLPM.IdMap.find C CTbl = Some (CTdef Cbody) ->
-      cty_consistent_with_Gamma Cbody Gamma ->
-    (* MTbl' is MTbl plus an appropriate model *)                 
-      forall (MTbl' : mdlcontext) M Mbody,
-        ~ IdLPM.IdMap.In M MTbl ->
-        MTbl' = IdLPM.IdMap.add M (MTdef C Mbody) MTbl ->
-    (* we qualify all the members from Gamma *)
-        forall mdlnames, mdlnames_consistent_with_Gamma mdlnames Gamma ->
-    (* then we can typecheck QMM'(M, mdlnames, tf) *)
-        CTbl $ MTbl' ; ctxempty |- (qualify_model_members' M mdlnames tf) \in Tf.
-
-*)
+Lemma free_in_context : forall CTbl MTbl x t T Gamma,
+   appears_free_in CTbl MTbl x t ->
+   CTbl $ MTbl ; Gamma |- t \in T ->
+   (exists T', Gamma x = Some (tmtype T'))
+     /\ ((exists MT, IdLPM.IdMap.find x MTbl = Some MT)
+                 \/ (IdLPM.IdMap.find x MTbl = None))
+   \/ (exists C, Gamma x = Some (cpttype C))
+   \/ (exists MT, IdLPM.IdMap.find x MTbl = Some MT)
+      /\ (Gamma x = None).
+Proof.
+  intros CTbl MTbl x t.
+  induction t;
+    intros T Gamma Hfree HT; 
+    unfold appears_free_in in *; simpl in *;
+    inversion HT; simpl in *; subst;
+    (* we can do some automation... *)
+    try 
+    solve [
+    (* in simple cases such as [ttrue] we have a contradiction
+       in the assumption: there are no FV in the term *)
+      match goal with
+      |[ H : IdLS.IdSet.In x IdLS.IdSet.empty |- _ ]
+       => rewrite IdLS.Props.IdSetProps.Dec.F.empty_iff in H; 
+          contradiction
+      end
+    (* in recursive cases such as [tif] pt [tsucc]
+       we can simply solve it by IH *)
+    | repeat (apply IdLS.Props.IdSetProps.FM.union_1 in Hfree;
+            destruct Hfree as [Hfree | Hfree]);
+          match goal with
+          | [IHt : forall (T : ty) (Gamma : context),
+                   IdLS.IdSet.In ?x (free_vars ?CTbl ?MTbl ?t1) ->
+                   ?CTbl $ ?MTbl; Gamma |- ?t1 \in T -> _,
+               Hfree : IdLS.IdSet.In ?x (free_vars ?CTbl ?MTbl ?t1),
+               HTt : ?CTbl $ ?MTbl; ?Gamma |- ?t1 \in ?T |- _]
+            => specialize (IHt _ Gamma Hfree HTt); assumption
+          end ].
+  - (* tvar i *)
+    apply IdLS.Props.IdSetProps.FM.singleton_1 in Hfree.
+    unfold IdUOT.eq in Hfree. subst.
+    left. split. 
+    + (* tmtype *) 
+      exists T. assumption.
+    + (* find dec *)
+      destruct (IdLPM.IdMap.find x MTbl) eqn:Heq.
+      left. eexists. reflexivity.
+      right. reflexivity.
+  - (* tabs *)
+    rename i into y. rename t into T11.
+    rewrite IdLS.Props.IdSetProps.Dec.F.remove_iff in Hfree.
+    destruct Hfree as [Hfree Heqxy]. unfold IdUOT.eq in *.
+    specialize (IHt _ _ Hfree H6).
+    pose proof (update_neq _ (tmtype T11) x y Gamma Heqxy) as HG.
+    rewrite <- HG. assumption.
+  - (* tcabs *)
+    rename i into c. rename i0 into C.
+    rewrite IdLS.Props.IdSetProps.Dec.F.remove_iff in Hfree.
+    destruct Hfree as [Hfree Heqxy]. unfold IdUOT.eq in *.
+    specialize (IHt _ _ Hfree H7).
+    pose proof (update_neq _ (cpttype C) x c Gamma Heqxy) as HG.
+    rewrite <- HG. assumption.
+  - (* [tcinvk c f] for c#C \in Gamma *)
+    rename i into c. rename i0 into f.
+    apply IdLS.Props.IdSetProps.FM.singleton_1 in Hfree.
+    unfold IdUOT.eq in Hfree. subst.
+    right. left. exists C. assumption.
+  - (* [tcinvk M f] *)
+    rename i into M. rename i0 into f.
+    apply IdLS.Props.IdSetProps.FM.singleton_1 in Hfree.
+    unfold IdUOT.eq in Hfree. subst.
+    destruct (Gamma x) eqn:Heq.
+    + (* tmtype or cpttype *)
+      destruct c eqn:Heq1. subst.
+      * (* tmtype *)
+        left. split. eexists; reflexivity.
+        left. eexists. eassumption.
+      * (* cpttype *)
+        exfalso. apply H1. eexists. reflexivity.
+    + (* None *)
+      right. right. split. eexists. eassumption. reflexivity.
+  - (* tlet *)
+    rename i into y.
+    apply IdLS.Props.IdSetProps.FM.union_1 in Hfree.
+    destruct Hfree as [Hfree | Hfree].
+    + specialize (IHt1 _ Gamma Hfree H6); assumption.
+    + rewrite IdLS.Props.IdSetProps.Dec.F.remove_iff in Hfree.
+      destruct Hfree as [Hfree Heqxy]. unfold IdUOT.eq in *.
+      specialize (IHt2 _ _ Hfree H7). 
+      pose proof (update_neq _ (tmtype T1) x y Gamma Heqxy) as HG.
+      rewrite <- HG. assumption.
+Qed.
 
 (** Context consists of type variables only. *)
 Definition Gamma_of_tmtypes (G : context) :=
@@ -2355,71 +2663,6 @@ Definition mdlnames_consistent_with_Gamma (mdlnames : id_set) (G : context) :=
   forall x, G x <> None ->
             IdLS.IdSet.In x mdlnames.
 
-(*
-Definition no_cvars_from_mdlnames_in_Gamma (mdlnames : id_set) (G : context) :=
-  forall c C, G c = Some (cpttype C) ->
-              ~ IdLS.IdSet.In c mdlnames.
-*)
-
-
-
-
-
-
-
-
-
-(*
-Lemma qualify_model_members_empty_context : 
-  forall CTbl MTbl t T,
-    CTbl $ MTbl ; ctxempty |- t \in T ->
-    forall M Mbody,
-      qualify_model_members M Mbody t = t.
-Proof.
-  intros CTbl MTbl t.
-  induction t;
-    intros T HT M Mbody;
-    inversion HT; subst; simpl;
-    unfold qualify_model_members in *; simpl.
-  - (* tvar *)
-    inversion H3.
-  - (* tapp *)
-    erewrite IHt1.
-    erewrite IHt2.
-    reflexivity.
-    eassumption. eassumption.
-  - (* tabs *)
-    rename i into x. rename t into T.
-    
-
-Abort.
-
-Lemma qualify_model_members_empty_context : 
-  forall CTbl MTbl t T,
-    CTbl $ MTbl ; ctxempty |- t \in T ->
-    forall M Mbody,
-      qualify_model_members M Mbody t = t.
-Proof.
-  intros CTbl MTbl t.
-  induction t;
-    intros T HT M Mbody;
-    inversion HT; subst; simpl;
-    unfold qualify_model_members in *; simpl.
-  - (* tvar *)
-    inversion H3.
-  - (* tapp *)
-    erewrite IHt1.
-    erewrite IHt2.
-    reflexivity.
-    eassumption. eassumption.
-  - (* tabs *)
-    rename i into x. rename t into T.
-    
-
-Abort.
-*)
-
-
 (** There is a subtelty in typing preservation for substitution.
     If [v] has type [S] in the empty context,
       it could be the case that v is equal to [M.f]
@@ -2427,26 +2670,33 @@ Abort.
     It means that [v] could become badly-typed 
     in the context [Gamma] which contains [M].
 
+    Here is an _example_.
+
+    * [concept CBar { foo : Nat -> Nat },
+       concept CFoo { foo : Bool },
+       model MFoo of CFoo { foo = true }]
+    * [Gamma = { MFoo # CBar }]
+    * [t = if x then 42 else 0]
+    * [v = MFoo.foo] 
+
+    We have:
+      [Gamma, x:Bool |- t : Nat]
+    and
+      [|- v : Bool].
+   
+    But the result of substitution does not have a type:
+      [MFoo # CBar |- if MFoo.foo then 42 else 0 !!!]
+    because [MFoo.foo] in [Gamma] has type [Nat -> Nat]. 
+
     Thus, we can only consider [Gamma], which
-    does not contain model-named variables.
+    does not contain concept variables named as models.
+
+    As long as concept variables come into Gamma from a term,
+    we also have to require that a term does not contain
+    bound concept variables named as models.
  *)
 
-(** We need even stronger requirement.
-
-    Suppose we have
-    * [v = M.f : Nat] (Note that FV(M.f) = M)
-    * [t = \M:Nat.M + x]
-    * [x : Nat]
-    
-    Then [x:=v]t = \M:Nat.M + M.f does not have a type.
-
-    The problem is that model name [M] became bound
-    in the term t.
-
-    So we need that terms do not have shared 
-    variables with MTable.
-*)
-
+(*
 Fixpoint all_vars (t : tm) : IdLS.id_set := 
   match t with
   (* AV(x) = {x} *)
@@ -2551,19 +2801,19 @@ Ltac prove_no_model_names_in_upd_Gamma :=
          specialize (HGamma zf HM);
          rewrite update_neq; assumption ]
   end.
+*)
 
 Lemma substitution_preserves_typing : 
   forall CTbl MTbl Gamma x S t v T,
-    cptcontext_welldefined CTbl ->
-    mdlcontext_welldefined CTbl MTbl ->
-    no_model_names_in_context CTbl MTbl Gamma ->
-    no_model_names_in_term CTbl MTbl t ->
+    no_model_names_as_cvars_in_Gamma MTbl Gamma ->
+    no_model_names_as_bound_cvars_in_term MTbl t ->
+    no_model_names_as_bound_cvars_in_term MTbl v ->
     CTbl $ MTbl ; (update Gamma x (tmtype S)) |- t \in T ->
     CTbl $ MTbl ; ctxempty |- v \in S -> 
     CTbl $ MTbl ; Gamma |- [x:=v] t \in T.
 Proof.
-  intros CTbl MTbl Gamma x S t v T HCTOk HMTOk.
-  intros HGamma Hvars HTt HTv.
+  intros CTbl MTbl Gamma x S t v T (*HCTOk HMTOk*).
+  intros HGamma HtOk HvOk HTt HTv.
   generalize dependent T. generalize dependent Gamma.
   induction t;
     intros Gamma HGamma T HTt;
@@ -2576,36 +2826,28 @@ Proof.
     match goal with
       [ IHt : context[ [?x:=?v] ?s ]
         |- ?CTbl $ ?MTbl; ?Gamma |- [?x := ?v] ?s \in ?T ]
-      => apply IHt; try assumption; prove_no_model_names_in_subterm 
+      => apply IHt; try assumption; 
+         prove_no_model_names_as_bound_cvars_in_subterm 
     end ].
 (* tvar *)
   - rename i into y. destruct (beq_idP x y). 
     + subst. 
       rewrite update_eq in H3. inversion H3. subst. clear H3.
-      apply context_invariance with (Gamma := ctxempty);
+      apply context_weakening with (Gamma := ctxempty);
         try assumption.
-      intros x Hfree. 
-      pose proof (free_in_context _ _ x v _ _ Hfree HTv) as Hv'.
-      destruct Hv' as [HG | [HG | HG]]; unfold ctxempty in *.
-      * inversion HG as [V HV]. 
-        rewrite apply_empty in HV. inversion HV.
-      * inversion HG as [V HV]. 
-        rewrite apply_empty in HV. inversion HV.
-      * unfold no_model_names_in_context in HGamma.
-        specialize (HGamma x HG).
-        rewrite apply_empty.
-        destruct (Gamma x) eqn:Heq.
-        { inversion HGamma. }
-        { reflexivity. }
+      intros x Hnone. unfold ctxempty in Hnone. 
+      rewrite apply_empty in Hnone. tauto.
     + constructor.
       rewrite <- H3. symmetry.
       apply update_neq. assumption.
 (* tapp *)
   - apply T_App with T11.
     + apply IHt1;
-        [prove_no_model_names_in_subterm | assumption | assumption].
+        [prove_no_model_names_as_bound_cvars_in_subterm 
+        | assumption | assumption].
     + apply IHt2; 
-        [prove_no_model_names_in_subterm | assumption | assumption].
+        [prove_no_model_names_as_bound_cvars_in_subterm 
+        | assumption | assumption].
 (* tabs *)
   - rename i into y. rename t into T.
     destruct (beq_idP x y) as [Heqxy | Heqxy]. 
@@ -2614,34 +2856,26 @@ Proof.
       apply context_invariance with (update Gamma y (tmtype S));
         try assumption.
       intros x Hfree.
-      destruct (beq_idP x y) as [Heqxy | Heqxy].
+      destruct (beq_idP y x) as [Heqxy | Heqxy].
       * subst. unfold appears_free_in in Hfree.
         simpl in Hfree.
-        assert (Htriv : y = y) by reflexivity.
+        assert (Htriv : x = x) by reflexivity.
         apply IdLS.Props.IdSetProps.Dec.F.remove_1
-        with (s := free_vars CTbl MTbl t0) (x := y) (y := y) in Htriv.
+        with (s := free_vars CTbl MTbl t0) (x := x) (y := x) in Htriv.
         apply Htriv in Hfree. contradiction.
-      * apply update_neq. intuition.
+      * apply update_neq. assumption.
     + (* x <> y *)
       apply T_Abs.
-      apply IHt. prove_no_model_names_in_subterm.
+      apply IHt. prove_no_model_names_as_bound_cvars_in_subterm.
       * (* model names invariant *) 
-        unfold no_model_names_in_context.
-        intros z HM.
-        inversion HM as [MT HMT]. 
-        assert (Hin : IdLPM.IdMap.In z MTbl)
-          by (apply MId.IdLPM.Props.IdMapProps.F.in_find_iff;
-              intros contra; rewrite HMT in contra; inversion contra).        
+        unfold no_model_names_as_cvars_in_Gamma.
+        intros z [[C HupdM] HMinMT].
         destruct (beq_idP y z) as [Hyz | Hyz].
-        { subst. unfold no_model_names_in_term in Hvars.
-          specialize (Hvars z Hin).
-          exfalso. apply Hvars. simpl.
-          auto using IdLS.Props.IdSetProps.Dec.F.union_2,
-                     IdLS.Props.IdSetProps.FM.singleton_2. }
-        { unfold no_model_names_in_context in HGamma.
-          specialize (HGamma z HM).
-          rewrite update_neq.  
-          assumption. assumption. }
+        { subst. rewrite update_eq in HupdM. inversion HupdM. }
+        { unfold no_model_names_as_cvars_in_Gamma in HGamma.
+          rewrite update_neq in HupdM; try assumption.
+          apply HGamma with z. split.
+          eexists; eassumption. assumption. }
       * apply context_invariance 
         with (update (update Gamma x (tmtype S)) y (tmtype T)); 
           try assumption.
@@ -2663,13 +2897,24 @@ Proof.
       intros z Hfree.
       rewrite (update_shadow _ Gamma _ _ x). reflexivity.
     + (* x <> c*)
-      apply IHt. prove_no_model_names_in_subterm.
-      prove_no_model_names_in_upd_Gamma.
-      apply context_invariance 
-      with (update (update Gamma x (tmtype S)) c (cpttype C));
-        try assumption.
-      intros z _.
-      apply update_permute_get. intuition.
+      apply IHt. prove_no_model_names_as_bound_cvars_in_subterm.
+      * (* model names invariant *) 
+        unfold no_model_names_as_cvars_in_Gamma.
+        intros z [[C0 HupdM] HMinMT].
+        unfold no_model_names_as_bound_cvars_in_term in HtOk.
+        destruct (beq_idP c z) as [Hcz | Hcz].
+        ** subst. apply HtOk. exists z. split; try assumption.
+           simpl. apply IdLS.Props.IdSetProps.Dec.F.add_1. reflexivity.
+        ** rewrite update_neq in HupdM; try assumption.
+           unfold no_model_names_as_cvars_in_Gamma in HGamma.
+           apply HGamma with z. split.
+           eexists. eassumption. assumption.
+      * (* typing *) 
+        apply context_invariance 
+        with (update (update Gamma x (tmtype S)) c (cpttype C));
+          try assumption.
+        intros z _.
+        apply update_permute_get. intuition.
 (* tcinvk c f *)
   - rename i into c. rename i0 into f.
     apply context_invariance with (update Gamma x (tmtype S));
@@ -2683,14 +2928,17 @@ Proof.
       inversion H4.
     + rewrite update_neq. reflexivity. assumption.
 (* tcinvk M f *)
-(*
   - rename i into M. rename i0 into f.
     apply T_MInvk with C Mbody; try assumption.
-    apply update_none in H1. assumption.
+    unfold no_model_names_as_cvars_in_Gamma in HGamma.
+    intros [MC contra]. apply HGamma with M. split.
+    exists MC. assumption. apply IdMapProps.F.in_find_iff.
+    intros contra'. rewrite H5 in contra'. inversion contra'.
 (* tlet *)
   - rename i into y. 
     apply T_Let with T1.
-    apply IHt1; try assumption. prove_no_model_names_in_subterm.
+    apply IHt1; try assumption. 
+    prove_no_model_names_as_bound_cvars_in_subterm.
     destruct (beq_idP x y) as [Hxy | Hxy]. 
     + (* x = y *) 
       subst. 
@@ -2700,47 +2948,81 @@ Proof.
       intros x _.
       rewrite update_shadow. reflexivity.
     + (* x <> y *)
-      apply IHt2. prove_no_model_names_in_subterm.
-      prove_no_model_names_in_upd_Gamma.
-      apply context_invariance 
-      with (update (update Gamma x (tmtype S)) y (tmtype T1)); 
-        try assumption.
-      intros z _. 
-      apply update_permute_get; assumption. *)
-Abort.
-(*Qed.*)
-
+      apply IHt2. prove_no_model_names_as_bound_cvars_in_subterm.
+      * (* model names invariant *) 
+        unfold no_model_names_as_cvars_in_Gamma.
+        intros z [[C HupdM] HMinMT].
+        destruct (beq_idP y z) as [Hyz | Hyz].
+        { subst. rewrite update_eq in HupdM. inversion HupdM. }
+        { unfold no_model_names_as_cvars_in_Gamma in HGamma.
+          rewrite update_neq in HupdM; try assumption.
+          apply HGamma with z. split.
+          eexists; eassumption. assumption. }
+      * apply context_invariance 
+        with (update (update Gamma x (tmtype S)) y (tmtype T1)); 
+          try assumption.
+        intros z _. 
+        apply update_permute_get; assumption.
+Qed.
 
 (** There are subtelties with concept substitution as well. 
-    
-    Consider an example:
-    * [Gamma = {c # MonoidNat, MMonoidSum : bool}]
-    * [t = c.ident : MonoidNat # Nat]
-    * [M = MMonoidSum]
 
-    Then [#c := M] t = MMonoidSum.ident 
-    cannot be typed in [Gamma]!
+    Consider an example.
 
-    And model names can only appear in a context
-    if they are bound variables.
+    * [concept CBar {foo : Nat},
+       concept CFoo {foo : Bool},
+       model MFoo of CFoo ...]
+    * [Gamma = {MFoo#CBar}]
+    * [t = c.foo]
+    * [M = MFoo]    
+
+    We have
+      [Gamma, c#CFoo |- c.foo : Bool]
+    but 
+      [[c:=MFoo]t = MFoo.foo]
+    and
+      [MFoo#CBar |- MFoo.foo : Nat], not [Bool]!
+
+    So we need that model name we substitute for 
+    the concept parameter does no appear in Gamma
+    as a bound concept variable.
 *)
 
-(*
+
+Ltac prove_no_model_name_in_subterm :=
+      match goal with
+        [ HMt : ~ IdLS.IdSet.In ?M (bound_cvars ?t)
+          |- ~ IdLS.IdSet.In ?M (bound_cvars ?s) ]
+        => match t with context[ s ] 
+           => let Hcontra := fresh "contra" in
+              intros Hcontra;
+              assert (Hcontrapremise : IdLS.IdSet.In M (bound_cvars t))
+                by (simpl;
+                    auto using IdLS.Props.IdSetProps.Dec.F.union_2,
+                    IdLS.Props.IdSetProps.Dec.F.union_3,
+                    IdLS.Props.IdSetProps.Dec.F.remove_2);
+              apply HMt; assumption
+           end
+      end.
+
+
 Lemma concept_substitution_preserves_typing : 
   forall CTbl MTbl Gamma c C t T M Mbody,
-    cptcontext_welldefined CTbl ->
-    mdlcontext_welldefined CTbl MTbl ->    
-    no_model_names_in_context CTbl MTbl Gamma ->
-    no_model_names_in_term CTbl MTbl t ->
+(*    cptcontext_welldefined CTbl ->
+    mdlcontext_welldefined CTbl MTbl ->    *)
+(*    no_model_names_in_context CTbl MTbl Gamma ->
+    no_model_names_in_term CTbl MTbl t -> *)
     CTbl $ MTbl ; (update Gamma c (cpttype C)) |- t \in T ->
     IdLPM.IdMap.find M MTbl = Some (MTdef C Mbody) ->
+    (~ exists C, Gamma M = Some (cpttype C)) ->
+    (~ IdLS.IdSet.In M (bound_cvars t)) ->
     CTbl $ MTbl ; Gamma |- [#c:=M] t \in T.
 Proof.
-  intros CTbl MTbl Gamma c C t T M Mbody HCTOk HMTOk.
-  intros HGamma Hvars HTt HMdef.
+  intros CTbl MTbl Gamma c C t T M Mbody (*HCTOk HMTOk*).
+  intros (*HGamma Hvars*) HTt HMdef HMGamma HMt.
   generalize dependent T. generalize dependent Gamma.
   induction t;
-    intros Gamma HGamma T HTt;
+    intros Gamma HMGamma (*HGamma*) T HTt;
     inversion HTt; subst; simpl;
   (* simple cases such as [ttrue] can be solved with constructor *)
   try solve [constructor];
@@ -2750,7 +3032,7 @@ Proof.
     match goal with
       [ IHt : context[ [#?c:=?M] ?s ]
         |- ?CTbl $ ?MTbl; ?Gamma |- [#?c := ?M] ?s \in ?T ]
-      => apply IHt; try assumption; prove_no_model_names_in_subterm 
+      => apply IHt; try assumption; prove_no_model_name_in_subterm 
     end ].
 (* tvar *)
   - rename i into y. destruct (beq_idP c y). 
@@ -2762,10 +3044,8 @@ Proof.
       apply T_Var. assumption.
 (* tapp *)
   - apply T_App with T11.
-    + apply IHt1; try assumption. 
-      prove_no_model_names_in_subterm.
-    + apply IHt2; try assumption.
-      prove_no_model_names_in_subterm.
+    + apply IHt1; (assumption || prove_no_model_name_in_subterm). 
+    + apply IHt2; (assumption || prove_no_model_name_in_subterm).
 (* tabs *)
   - rename i into x. rename t into T.
     apply T_Abs.
@@ -2777,12 +3057,17 @@ Proof.
         try assumption.
       intros z _. rewrite update_shadow. reflexivity.
     + (* c <> x *)
-      apply IHt. prove_no_model_names_in_subterm.
-      prove_no_model_names_in_upd_Gamma.
-      apply context_invariance 
-      with (update (update Gamma c (cpttype C)) x (tmtype T));
-        try assumption.
-      intros z _. apply update_permute_get; assumption.
+      apply IHt. 
+      * prove_no_model_name_in_subterm.
+      * (* M not in upd Gamma *)
+        destruct (beq_idP x M) as [HxM | HxM].
+        { subst. rewrite update_eq. 
+          intros [C0 contra]. inversion contra. }
+        { rewrite update_neq; try assumption. }
+      * apply context_invariance 
+        with (update (update Gamma c (cpttype C)) x (tmtype T));
+          try assumption.
+        intros z _. apply update_permute_get; assumption.
 (* tmapp *)
   - rename i into M'.
     apply T_MApp with C0 Mbody0. assumption.
@@ -2797,21 +3082,29 @@ Proof.
         with (update (update Gamma c' (cpttype C)) c' (cpttype C'));
           try assumption.
         intros z _. rewrite update_shadow. reflexivity.
-      + (* c <> c' *)
+      + (* c <> c' *)        
         apply IHt; try assumption.
-        prove_no_model_names_in_subterm. 
-        prove_no_model_names_in_upd_Gamma.
-        apply context_invariance 
-        with (update (update Gamma c (cpttype C)) c' (cpttype C'));
-          try assumption.
-        intros z _. apply update_permute_get; assumption.
+        simpl in HMt.
+        * destruct (beq_idP c' M) as [Hc'M | Hc'M].
+          ** subst. exfalso.
+             apply HMt. apply IdLS.Props.IdSetProps.Dec.F.add_1. reflexivity.
+          ** rewrite IdLS.Props.IdSetProps.Dec.F.add_neq_iff in HMt;
+               try assumption.
+        * destruct (beq_idP c' M) as [Hc'M | Hc'M].
+          ** subst. simpl in HMt. exfalso.
+             apply HMt. apply IdLS.Props.IdSetProps.Dec.F.add_1. reflexivity.
+          ** rewrite update_neq; try assumption.
+        * apply context_invariance 
+          with (update (update Gamma c (cpttype C)) c' (cpttype C'));
+            try assumption.
+          intros z _. apply update_permute_get; assumption.
 (* tcinvk *)
     - rename i into c'. rename i0 into f.
       destruct (beq_idP c c') as [Hcc' | Hcc'].
       + (* c = c' *)
-        subst.
-        apply T_MInvk with C Mbody; try assumption.
-        unfold no_model_names_in_context in HGamma;
+        subst. rewrite update_eq in H4. inversion H4; subst. clear H4.
+        apply T_MInvk with C0 Mbody; try assumption.
+(*        unfold no_model_names_in_context in HGamma;
           try assumption.
         assert (HMT : exists MT : mty, IdLPM.IdMap.find M MTbl = Some MT)
           by (exists (MTdef C Mbody); assumption).
@@ -2819,27 +3112,28 @@ Proof.
         destruct (Gamma M) eqn:Heq.
         * symmetry in Heq. inversion HGamma.
         * reflexivity.
-        * rewrite update_eq in H4. inversion H4. subst. assumption.
+        * rewrite update_eq in H4. inversion H4. subst. assumption. *)
       + (* c <> c' *)
         inversion HTt; subst.
-        apply T_CInvk with C1.
-        rewrite update_neq in H5. assumption. 
-        assumption. assumption.
-        rewrite H4 in H1. inversion H1.
-(* tcinvk *)
+        * apply T_CInvk with C1.
+          rewrite update_neq in H5. assumption. 
+          assumption. assumption.
+        * rewrite update_neq in H1; try assumption.
+          apply T_MInvk with C1 Mbody0; try assumption.
+(* tcinvk T_MInvk *)
     - rename i into M'. rename i0 into f.
       destruct (beq_idP c M') as [HcM' | HcM'].
       + (* c = M' *)
-        subst.
-        rewrite update_eq in H1. inversion H1.
+        subst. exfalso. apply H1.
+        exists C. rewrite update_eq. reflexivity.
       + (* c <> M' *)
         apply T_MInvk with C0 Mbody0; try assumption.
-        apply update_none in H1. assumption.
+        rewrite update_neq in H1. assumption. assumption.
 (* tlet *)
     - rename i into y.
       apply T_Let with T1.
       apply IHt1; try assumption.
-      prove_no_model_names_in_subterm.
+      prove_no_model_name_in_subterm.
       destruct (beq_idP c y) as [Hcy | Hcy].
       + (* c = y *)
         subst.
@@ -2848,16 +3142,22 @@ Proof.
           try assumption.
         intros z _. rewrite update_shadow. reflexivity.
       + (* c <> y *)
-        apply IHt2; try assumption.
-        prove_no_model_names_in_subterm.
-        prove_no_model_names_in_upd_Gamma.
-        apply context_invariance 
-        with (update (update Gamma c (cpttype C)) y (tmtype T1));
-          try assumption.
-        intros z _. apply update_permute_get; assumption.
+        apply IHt2.
+        * prove_no_model_name_in_subterm.
+        * (* M not in upd Gamma *)
+          destruct (beq_idP y M) as [HyM | HyM].
+          { subst. rewrite update_eq. 
+            intros [C0 contra]. inversion contra. }
+          { rewrite update_neq; try assumption. }
+        * apply context_invariance 
+          with (update (update Gamma c (cpttype C)) y (tmtype T1));
+            try assumption.
+          intros z _. apply update_permute_get; assumption.
 Qed.
 
 
+
+(*
 Lemma no_model_names_in_empty_context :
   forall CTbl MTbl,
     no_model_names_in_context CTbl MTbl ctxempty.
@@ -2867,8 +3167,10 @@ Proof.
   intros x H.
   reflexivity.
 Qed.
+*)
 
 
+(*
 Fixpoint concept_names_ty (T : ty) : id_set :=
   match T with
   | TBool => IdLS.IdSet.empty
@@ -3259,24 +3561,35 @@ Theorem mdlcontext_WD_minimal_Gamma_for_member :
                     /\ CTbl $ MTbl ; ctxempty |- tcinvk M x \in GT )).
 Admitted.
 
+*)
 
+Lemma no_model_names_as_cvars_in_empty_context :
+  forall MTbl, 
+    no_model_names_as_cvars_in_Gamma MTbl ctxempty.
+Proof.
+  intros MTbl.
+  unfold no_model_names_as_cvars_in_Gamma.
+  intros z [[C contra] _].
+  inversion contra.
+Qed.  
 
 
 (* ----------------------------------------------------------------- *)
 (** **** Main Preservation Theorem *)
 (* ----------------------------------------------------------------- *)
 
+
 Ltac prove_preservation_with_IH :=
   match goal with
-    [ Hbvars : no_model_names_in_term ?CTbl ?MTbl ?t ,
+    [ Hbvars : no_model_names_as_bound_cvars_in_term ?MTbl ?t ,
       HTs    : ?CTbl $ ?MTbl ; ctxempty |- ?s \in ?S ,
-      IHHE   : no_model_names_in_term ?CTbl ?MTbl ?s ->
+      IHHE   : no_model_names_as_bound_cvars_in_term ?MTbl ?s ->
                forall T : ty, 
                  ?CTbl $ ?MTbl ; ctxempty ||- ?s \in T ->
                  ?CTbl $ ?MTbl; ctxempty ||- ?s' \in T
         |- ?CTbl $ ?MTbl; ctxempty |- ?s' \in ?S]
-    => assert (Hmnames : no_model_names_in_term CTbl MTbl s)
-         by prove_no_model_names_in_subterm ;
+    => assert (Hmnames : no_model_names_as_bound_cvars_in_term MTbl s)
+         by prove_no_model_names_as_bound_cvars_in_subterm ;
        assert (HTypeSub : CTbl $ MTbl; ctxempty ||- s \in S) 
          by (split; [ assumption | split; assumption ]) ;
        specialize (IHHE Hmnames S HTypeSub);
@@ -3284,9 +3597,10 @@ Ltac prove_preservation_with_IH :=
        assumption
   end.
 
+
 Theorem preservation : forall CTbl MTbl t t' T,
-    (* source term does not use model names as bound variables *)
-    no_model_names_in_term CTbl MTbl t ->
+    (* source term does not use model names as bound concept variables *)
+    no_model_names_as_bound_cvars_in_term MTbl t -> 
     (* source term has a type *)
     CTbl $ MTbl ; ctxempty ||- t \in T ->
     (* term makes a step *)
@@ -3295,7 +3609,7 @@ Theorem preservation : forall CTbl MTbl t t' T,
     CTbl $ MTbl ; ctxempty ||- t' \in T.
 Proof.
   remember ctxempty as Gamma.
-  intros CTbl MTbl t t' T Hbvars HT HE. 
+  intros CTbl MTbl t t' T HtOk HT HE. 
   generalize dependent T.
   induction HE;
     intros T [HCTOk [HMTOk HT]]; subst Gamma;
@@ -3313,8 +3627,9 @@ Proof.
 (* ST_AppAbs *)
   - apply substitution_preserves_typing with T0;
       try assumption.
-    apply no_model_names_in_empty_context.
-    prove_no_model_names_in_subterm.
+    apply no_model_names_as_cvars_in_empty_context.
+    prove_no_model_names_as_bound_cvars_in_subterm.
+    prove_no_model_names_as_bound_cvars_in_subterm.    
     inversion H5. subst. assumption.
 (* ST_App1 *)
   - apply T_App with T11; try assumption.
@@ -3325,17 +3640,24 @@ Proof.
 (* ST_MAppAbs *)
   - apply concept_substitution_preserves_typing with C0 Mbody0;
       try assumption.
-    apply no_model_names_in_empty_context.
-    prove_no_model_names_in_subterm.
-    inversion H7; subst. assumption.
+    + inversion H7; subst. assumption.
+    + intros [C1 contra]. inversion contra.
+    + unfold no_model_names_as_bound_cvars_in_term in HtOk.
+      simpl in HtOk.
+      intros HinM. apply HtOk. exists M.
+      split. 
+      apply IdLS.Props.IdSetProps.Dec.F.add_2. assumption.
+      apply IdMapProps.F.in_find_iff. intros contra. 
+        rewrite H5 in contra. inversion contra.
 (* ST_MApp *) 
   - apply T_MApp with C Mbody; try assumption.
     prove_preservation_with_IH.
 (* tf (method invocation) for concept *)
-  - unfold ctxempty in H6. rewrite apply_empty in H6.
-    inversion H6.
+  - inversion H6.
 (* M.f ==> tf for model *)
   - clear H3.
+Abort.
+(*
     pose proof (mdlcontext_WD_minimal_Gamma_for_member
                 CTbl MTbl M C Mbody f tf 
                 HCTOk HMTOk H H0) as HtfOk.
@@ -3361,7 +3683,7 @@ Proof.
     apply no_model_names_in_empty_context.
     prove_no_model_names_in_subterm.
 Qed.
-
+*)
 
 (* ================================================================= *)
 (** *** Soundness *)
@@ -3481,7 +3803,7 @@ Definition normal_form CTbl MTbl (t : tm) : Prop :=
 Definition stuck CTbl MTbl (t : tm) : Prop :=
   (normal_form CTbl MTbl t) /\ ~ value t.
 
-
+(*
 Corollary soundness : 
   forall CTbl MTbl t t' T,
     no_model_names_in_term CTbl MTbl t ->

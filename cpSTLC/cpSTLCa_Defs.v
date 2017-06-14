@@ -924,11 +924,8 @@ Definition no_bound_var_names_in_term
 *)
 
 Definition model_member_valid (CTbl : cptcontext) (MTbl : mdlcontext)
-           (mdlnames : id_set) (cpt : id_ty_map) (prevmems : id_ty_map)
+           (mdlnames : id_set) (cpt : id_ty_map) (Gamma : context)
            (nm : id) (t : tm) : Prop :=
-  let Gamma := IdLPM.IdMap.fold 
-                 (fun nm tp G => update G nm (tmtype tp))
-                 prevmems ctxempty in
   exists (T : ty),
     (** there is [nm : T] in a concept *)
     find_ty nm cpt = Some T
@@ -956,7 +953,7 @@ Module MMdlMem_DataLCI <: DataLCI.
 
   (** Type of Local Context which is needed for checking WD of terms
       (here we need types of previously defined members). *)
-  Definition ctxloc := id_ty_map.
+  Definition ctxloc := context.
 
   (** Type of Concept representation in symbol table *)
   Definition intrfs := id_ty_map.
@@ -967,11 +964,11 @@ Module MMdlMem_DataLCIOkDef <: DataLCIOkDef MId MMdlMem_DataLCI.
   (* Element [t] must be ok with respect 
      to global [ctx] and local [ctxloc] contexts. *) 
   Definition is_ok (cm_nms : cptcontext * mdlcontext * id_set) 
-             (cpt : id_ty_map) (prevmems : id_ty_map) 
+             (cpt : id_ty_map) (Gamma : context) 
              (nm : id) (t : tm) : Prop := 
     let (cm, mdlnms) := cm_nms in
     let (c, m) := cm in
-    model_member_valid c m mdlnms cpt prevmems nm t.
+    model_member_valid c m mdlnms cpt Gamma nm t.
 
 End MMdlMem_DataLCIOkDef.
 
@@ -981,15 +978,15 @@ Module MMdlMem_SinglePassImplMBase <: SinglePassImplModuleBase.
   Module MD := MMdlMem_DataLCI.
 
   (** Initial local context (Gamma) *)
-  Definition ctxl_init := IdLPM.IdMap.empty ty.
+  Definition ctxl_init := ctxempty.
 
   (** Update local context *)
-  Definition upd_ctxloc (prevmems : id_ty_map) 
+  Definition upd_ctxloc (Gamma : context) 
              (cm_nms : cptcontext * mdlcontext * id_set) 
-             (cpt : id_ty_map) (nm : id) (t : tm) : id_ty_map :=
+             (cpt : id_ty_map) (nm : id) (t : tm) : context :=
     match find_ty nm cpt with
-    | Some tp => IdLPM.IdMap.add nm tp prevmems
-    | None => prevmems
+    | Some tp => update Gamma nm (tmtype tp)
+    | None => Gamma
     end.
 
   (** Members which have to be defined by an interface *)

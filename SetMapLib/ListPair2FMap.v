@@ -4,7 +4,7 @@
    into
      Maps from id to T (FMap interface)   
   
-   Last Update: Fri, 12 May 2017
+   Last Update: Wed, 14 June 2017
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% *) 
 
 Add LoadPath "../..".
@@ -135,6 +135,11 @@ Module Type ListPair2FMapW
         NoDup (get_ids pnds) ->
         IdMap.MapsTo nm tp (map_from_list pnds).
 
+    Axiom in_ids__in_map_from_list :
+      forall (val : Type) (pnds : list (id * val)) (nm : id),
+        List.In  nm (get_ids pnds) ->
+        IdMap.In nm (map_from_list pnds).
+
     Axiom map_from_list__find_cons___true : 
       forall (val : Type) (nm : id) (tp : val)                                  
              (pnds : list (id * val)),
@@ -185,6 +190,12 @@ Module Type ListPair2FMapW
       forall (val : Type) (ps : list (id * val)),
         List.NoDup (get_ids ps) ->
         eq_list_map ps (map_from_list ps).
+
+    Axiom eq_list_map__iff :
+      forall (val : Type) (ps : list (id * val)) (mp : id_map val),
+        eq_list_map ps mp ->
+        forall x v,
+          List.In (x, v) ps <-> IdMap.MapsTo x v mp.
 
   End Props.
 
@@ -775,6 +786,42 @@ Module MListPair2FMapW
     Qed.
 
 
+    Theorem in_ids__in_map_from_list :
+      forall (val : Type) (pnds : list (id * val)) (nm : id),
+        List.In  nm (get_ids pnds) ->
+        IdMap.In nm (map_from_list pnds).
+    Proof.
+      intros val pnds.
+      induction pnds as [| [n' d'] pnds' IHpnds'].
+      - intros. inversion H.
+      - intros nm Hnmin.
+        simpl in Hnmin. destruct Hnmin as [Hnmin | Hnmin].
+        + subst. remember (get_ids pnds') as ids.
+          assert (Hdec : {List.In nm ids} + {~ List.In nm ids}).
+          { apply List.in_dec. apply IdDT.eq_dec. }
+          destruct Hdec as [Hdec | Hdec].
+          * specialize (IHpnds' nm Hdec).
+            unfold map_from_list. simpl.
+            unfold map_from_list in IHpnds'.
+            unfold In in *.
+            destruct IHpnds' as [v Hmaps].
+            exists v.
+            apply Helper.map_from_list'__any_map with (empty val).
+            subst ids. assumption. assumption.
+          * unfold map_from_list.
+            unfold In. exists d'.
+            apply Helper.map_from_list'__cons_new. subst ids. assumption.
+        + specialize (IHpnds' nm Hnmin).
+          unfold map_from_list. simpl.
+          unfold map_from_list in IHpnds'.
+          unfold In in *.
+          destruct IHpnds' as [v Hmaps].
+          exists v.
+          apply Helper.map_from_list'__any_map with (empty val).
+          assumption. assumption.
+    Qed.
+
+
     Theorem map_from_list__find_cons___true : 
       forall (val : Type) (nm : id) (tp : val)                                  
              (pnds : list (id * val)),
@@ -958,6 +1005,28 @@ Module MListPair2FMapW
             (* rec case *)
             assumption.
     Qed.
+
+    Theorem eq_list_map__iff :
+      forall (val : Type) (ps : list (id * val)) (mp : id_map val),
+        eq_list_map ps mp ->
+        forall x v,
+          List.In (x, v) ps <-> IdMap.MapsTo x v mp.
+      Proof.
+        intros val ps mp Heq.
+        unfold eq_list_map in Heq.
+        destruct Heq as [Hnodup [Hlen Hforall]].
+        intros x v. 
+        split.
+        - (* List.In -> MapsTo *) 
+          rewrite Forall_forall in Hforall.
+          specialize (Hforall (x, v)).
+          intros Hin. specialize (Hforall Hin).
+          simpl in Hforall. apply F.find_mapsto_iff. assumption.
+        - (* MapsTo *)
+          intros Hmaps.
+          apply elem_in_map_eq_length__elem_in_list with mp;
+            try assumption.
+      Qed.
 
   End Props.
 
